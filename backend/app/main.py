@@ -276,13 +276,15 @@ async def reprocess_document(
 
 
 # Serve static frontend files in production
-if settings.static_dir.exists():
+if settings.static_dir.exists() and (settings.static_dir / "index.html").exists():
     from fastapi.staticfiles import StaticFiles
     from fastapi.responses import FileResponse
 
-    # Serve static assets (JS, CSS, images)
-    app.mount("/assets", StaticFiles(directory=settings.static_dir / "assets"), name="assets")
-    app.mount("/_app", StaticFiles(directory=settings.static_dir / "_app"), name="svelte_app")
+    # Mount static subdirectories if they exist
+    for subdir in ["_app", "assets"]:
+        subdir_path = settings.static_dir / subdir
+        if subdir_path.exists():
+            app.mount(f"/{subdir}", StaticFiles(directory=subdir_path), name=subdir)
 
     # SPA fallback - serve index.html for all non-API routes
     @app.get("/{full_path:path}")
