@@ -1,19 +1,23 @@
-.PHONY: help install dev backend frontend build clean docker-build docker-up docker-down
+.PHONY: help install dev backend frontend build clean docker-build docker-run docker-stop db-init process-inbox add update
 
 # Default target
 help:
 	@echo "DocStore - Document Digitization System"
 	@echo ""
 	@echo "Usage:"
-	@echo "  make install     Install all dependencies"
-	@echo "  make dev         Run both backend and frontend in development mode"
-	@echo "  make backend     Run backend only"
-	@echo "  make frontend    Run frontend only"
-	@echo "  make build       Build frontend for production"
-	@echo "  make clean       Remove build artifacts"
-	@echo "  make docker-build Build Docker images"
-	@echo "  make docker-up   Start Docker containers"
-	@echo "  make docker-down Stop Docker containers"
+	@echo "  make install       Install all dependencies"
+	@echo "  make dev           Run both backend and frontend in development mode"
+	@echo "  make backend       Run backend only"
+	@echo "  make frontend      Run frontend only"
+	@echo "  make build         Build frontend for production"
+	@echo "  make clean         Remove build artifacts"
+	@echo "  make docker-build  Build production Docker image"
+	@echo "  make docker-run    Run production container locally"
+	@echo "  make docker-stop   Stop production container"
+	@echo "  make db-init       Initialize database"
+	@echo "  make process-inbox Process files in inbox"
+	@echo "  make add pkg=name  Add a Python dependency"
+	@echo "  make update        Update all dependencies"
 	@echo ""
 
 # Install dependencies
@@ -57,15 +61,19 @@ clean:
 	find . -name "*.pyc" -delete
 	find . -name ".DS_Store" -delete
 
-# Docker
+# Docker (local testing)
 docker-build:
-	docker-compose build
+	docker build -t docstore .
 
-docker-up:
-	docker-compose up -d
+docker-run:
+	docker run -d --name docstore \
+		-p 8000:8000 \
+		-v docstore-data:/app/data \
+		--env-file backend/.env \
+		docstore
 
-docker-down:
-	docker-compose down
+docker-stop:
+	docker stop docstore && docker rm docstore
 
 # Database
 db-init:
