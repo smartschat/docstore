@@ -81,10 +81,7 @@ async def init_database() -> None:
                 counterparty TEXT,
                 affected_person TEXT,
                 category TEXT,
-                reference TEXT,
-                due_date DATE,
-                amount REAL,
-                currency TEXT DEFAULT 'EUR'
+                reference TEXT
             )
         """)
 

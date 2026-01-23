@@ -25,7 +25,6 @@ from app.models import (
     LoginResponse,
     AuthStatus,
     DashboardStats,
-    SpendingStats,
     Document,
     DocumentStatus,
     Tag,
@@ -189,9 +188,6 @@ async def get_stats(_: str = Depends(get_current_session)):
                 affected_person=row_dict.get("affected_person"),
                 category=row_dict.get("category"),
                 reference=row_dict.get("reference"),
-                due_date=row_dict.get("due_date"),
-                amount=row_dict.get("amount"),
-                currency=row_dict.get("currency") or "EUR",
                 tags=[],
             ))
 
@@ -200,45 +196,6 @@ async def get_stats(_: str = Depends(get_current_session)):
             documents_by_category=by_category,
             documents_by_status=by_status,
             recent_documents=recent,
-        )
-
-
-@app.get("/api/stats/spending", response_model=SpendingStats)
-async def get_spending_stats(_: str = Depends(get_current_session)):
-    """Get spending statistics from documents with amounts."""
-    async with aiosqlite.connect(settings.database_path) as db:
-        # Total spending
-        cursor = await db.execute(
-            "SELECT COALESCE(SUM(amount), 0) as total FROM documents WHERE amount IS NOT NULL"
-        )
-        total_spending = (await cursor.fetchone())[0]
-
-        # By category
-        cursor = await db.execute(
-            """
-            SELECT category, SUM(amount) as total
-            FROM documents
-            WHERE category IS NOT NULL AND amount IS NOT NULL
-            GROUP BY category
-            """
-        )
-        by_category = {row[0]: row[1] for row in await cursor.fetchall()}
-
-        # By month
-        cursor = await db.execute(
-            """
-            SELECT strftime('%Y-%m', document_date) as month, SUM(amount) as total
-            FROM documents
-            WHERE document_date IS NOT NULL AND amount IS NOT NULL
-            GROUP BY month
-            """
-        )
-        monthly = {row[0]: row[1] for row in await cursor.fetchall() if row[0]}
-
-        return SpendingStats(
-            total_spending=total_spending,
-            spending_by_category=by_category,
-            spending_by_month=monthly,
         )
 
 

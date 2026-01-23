@@ -122,9 +122,6 @@ async def update_document_extraction(doc_id: str, data: dict) -> None:
                 category = ?,
                 reference = ?,
                 document_date = ?,
-                due_date = ?,
-                amount = ?,
-                currency = ?,
                 summary = ?
             WHERE id = ?
             """,
@@ -135,9 +132,6 @@ async def update_document_extraction(doc_id: str, data: dict) -> None:
                 data.get("category"),
                 data.get("reference"),
                 data.get("document_date"),
-                data.get("due_date"),
-                data.get("amount"),
-                data.get("currency", "EUR"),
                 data.get("summary"),
                 doc_id,
             )

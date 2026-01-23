@@ -24,9 +24,6 @@ export interface Document {
 	affected_person: string | null;
 	category: string | null;
 	reference: string | null;
-	due_date: string | null;
-	amount: number | null;
-	currency: string;
 	tags: Tag[];
 }
 
@@ -66,12 +63,6 @@ export interface DashboardStats {
 	recent_documents: Document[];
 }
 
-export interface SpendingStats {
-	total_spending: number;
-	spending_by_category: Record<string, number>;
-	spending_by_month: Record<string, number>;
-	currency: string;
-}
 
 class ApiError extends Error {
 	constructor(
@@ -191,9 +182,6 @@ export async function updateDocument(
 		category?: string;
 		reference?: string;
 		document_date?: string;
-		due_date?: string;
-		amount?: number;
-		currency?: string;
 		summary?: string;
 	}
 ): Promise<Document> {
@@ -286,10 +274,6 @@ export async function listTags(): Promise<Tag[]> {
 // Stats
 export async function getStats(): Promise<DashboardStats> {
 	return request('/stats');
-}
-
-export async function getSpendingStats(): Promise<SpendingStats> {
-	return request('/stats/spending');
 }
 
 // System

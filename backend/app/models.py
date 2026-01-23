@@ -46,9 +46,6 @@ class DocumentUpdate(BaseModel):
     category: Optional[str] = None
     reference: Optional[str] = None
     document_date: Optional[date] = None
-    due_date: Optional[date] = None
-    amount: Optional[float] = None
-    currency: Optional[str] = None
     summary: Optional[str] = None
 
 
@@ -71,9 +68,6 @@ class Document(DocumentBase):
     affected_person: Optional[str] = None
     category: Optional[str] = None
     reference: Optional[str] = None
-    due_date: Optional[date] = None
-    amount: Optional[float] = None
-    currency: str = "EUR"
     # Relations
     tags: list[Tag] = []
 
@@ -148,8 +142,3 @@ class DashboardStats(BaseModel):
     recent_documents: list[Document]
 
 
-class SpendingStats(BaseModel):
-    total_spending: float
-    spending_by_category: dict[str, float]
-    spending_by_month: dict[str, float]
-    currency: str = "EUR"

@@ -30,14 +30,6 @@
 		return category ? `badge-${category}` : 'badge-other';
 	}
 
-	function formatCurrency(amount: number | null, currency: string = 'EUR'): string {
-		if (amount === null) return '';
-		return new Intl.NumberFormat('de-DE', {
-			style: 'currency',
-			currency
-		}).format(amount);
-	}
-
 	let thumbnailError = false;
 
 	function handleImageError(): void {
@@ -92,11 +84,6 @@
 							{document.status}
 						</span>
 					</div>
-					{#if document.amount !== null}
-						<span class="text-sm font-semibold text-slate-900">
-							{formatCurrency(document.amount, document.currency)}
-						</span>
-					{/if}
 				</div>
 			</div>
 

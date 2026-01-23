@@ -10,25 +10,52 @@ from app.config import get_settings
 settings = get_settings()
 
 
-EXTRACTION_PROMPT = """Analyze this document and extract the following information. Return a JSON object with these fields:
+# Step 1: Extract structured metadata
+METADATA_PROMPT = """Extract these fields from the document. Return JSON only.
 
-- title: A short, descriptive title for the document (e.g., "Stromrechnung Januar 2024", "Mietvertrag Hauptstraße 5")
-- counterparty: The other party involved - company, organization, or person (e.g., "Vodafone", "Finanzamt Berlin", "Dr. Müller")
-- affected_person: If the document is addressed to or concerns a specific person, extract their name. If unclear or general, use null.
-- category: Categorize the document. Use one of: utilities, insurance, tax, medical, banking, salary, contract, legal, correspondence, receipt, invoice, other
-- reference: Any reference number, invoice number, policy number, Aktenzeichen, or similar identifier
-- document_date: The main date of the document (YYYY-MM-DD format)
-- due_date: Payment deadline or action required date, if any (YYYY-MM-DD format)
-- amount: The primary monetary amount, if any (number only, no currency symbol)
-- currency: Currency code (EUR, USD, etc.) - default to EUR if unclear
-- summary: A 1-2 sentence summary of what this document is about, in the same language as the document
+- counterparty: Company or organization that issued this document (the employer for salary docs, the company for invoices)
+- affected_person: Full name of the person this document is about (look for "Herr/Frau" or name in address)
+- category: Choose one:
+  - salary: Lohnsteuerbescheinigung, Gehaltsabrechnung, payslips, wage documents
+  - tax: Steuerbescheid, tax assessments, Finanzamt letters
+  - insurance: Versicherung, policies, claims
+  - medical: Arzt, hospital, health documents
+  - banking: Bank statements, account documents
+  - utilities: Strom, Gas, water, internet bills
+  - invoice: Rechnung, bills to pay
+  - receipt: Quittung, proof of payment
+  - contract: Vertrag, agreements
+  - legal: Court, lawyer documents
+  - correspondence: General letters
+  - other: If none fit
+- reference: Reference/invoice/policy number or Aktenzeichen
+- document_date: Main date (YYYY-MM-DD)
 
-If a field cannot be determined, use null. Return only valid JSON, no other text.
+Return only valid JSON. Use null for unknown fields.
 
-Document text:
+Document:
 {text}
 
 JSON:"""
+
+
+# Step 2: Generate title (from summary)
+TITLE_PROMPT = """Create a short German title (2-5 words) for a document with this summary:
+
+{summary}
+
+Title:"""
+
+
+# Step 3: Generate summary
+SUMMARY_PROMPT = """Write a 1-2 sentence summary of this document.
+IMPORTANT: Write in the SAME LANGUAGE as the document.
+If the document is in German, write German. If English, write English.
+
+Document:
+{text}
+
+Summary:"""
 
 
 def get_empty_extraction() -> dict[str, Any]:
@@ -40,9 +67,6 @@ def get_empty_extraction() -> dict[str, Any]:
         "category": None,
         "reference": None,
         "document_date": None,
-        "due_date": None,
-        "amount": None,
-        "currency": "EUR",
         "summary": None,
     }
 
@@ -57,67 +81,109 @@ async def check_ollama_available() -> bool:
         return False
 
 
-async def extract_with_ollama(text: str) -> dict[str, Any]:
-    """
-    Extract structured data using Ollama.
+def parse_json_response(content: str) -> dict[str, Any]:
+    """Parse JSON from LLM response, handling markdown code blocks."""
+    content = content.strip()
 
-    Args:
-        text: Document text (from OCR)
+    # Handle markdown code blocks
+    if content.startswith("```"):
+        content = content.split("```")[1]
+        if content.startswith("json"):
+            content = content[4:]
+        content = content.strip()
 
-    Returns:
-        Dict with extracted fields
-    """
-    # Use first 8000 chars for extraction
-    truncated_text = text[:8000] if len(text) > 8000 else text
+    return json.loads(content)
+
+
+def strip_thinking(text: str) -> str:
+    """Remove <think>...</think> blocks from model output."""
+    import re
+    # Remove think blocks (can be multiline)
+    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+    return text.strip()
+
+
+async def call_ollama(prompt: str) -> str:
+    """Make a single call to Ollama and return the response text."""
+    async with httpx.AsyncClient(timeout=settings.ollama_timeout) as client:
+        response = await client.post(
+            f"{settings.ollama_base_url}/api/generate",
+            json={
+                "model": settings.ollama_model,
+                "prompt": prompt,
+                "stream": False,
+                "think": False,
+                "options": {
+                    "temperature": 0,
+                },
+            },
+        )
+        response.raise_for_status()
+        result = response.json()
+        text = result.get("response", "").strip()
+        # Strip any thinking blocks that might be included
+        return strip_thinking(text)
+
+
+async def extract_metadata(text: str) -> dict[str, Any]:
+    """Step 1: Extract structured metadata fields."""
+    truncated = text[:6000]
 
     try:
-        async with httpx.AsyncClient(timeout=settings.ollama_timeout) as client:
-            response = await client.post(
-                f"{settings.ollama_base_url}/api/generate",
-                json={
-                    "model": settings.ollama_model,
-                    "prompt": EXTRACTION_PROMPT.format(text=truncated_text),
-                    "stream": False,
-                },
-            )
-            response.raise_for_status()
-            result = response.json()
-            content = result.get("response", "").strip()
+        response = await call_ollama(METADATA_PROMPT.format(text=truncated))
+        data = parse_json_response(response)
 
-            # Parse JSON response
-            # Handle markdown code blocks
-            if content.startswith("```"):
-                content = content.split("```")[1]
-                if content.startswith("json"):
-                    content = content[4:]
+        # Validate date
+        if data.get("document_date"):
+            try:
+                date.fromisoformat(data["document_date"])
+            except (ValueError, TypeError):
+                data["document_date"] = None
 
-            data = json.loads(content)
-
-            # Validate and clean up dates
-            for date_field in ["document_date", "due_date"]:
-                if data.get(date_field):
-                    try:
-                        date.fromisoformat(data[date_field])
-                    except (ValueError, TypeError):
-                        data[date_field] = None
-
-            # Ensure amount is a number or None
-            if data.get("amount") is not None:
-                try:
-                    data["amount"] = float(data["amount"])
-                except (ValueError, TypeError):
-                    data["amount"] = None
-
-            return data
-
+        return data
     except Exception as e:
-        print(f"Ollama extraction error: {e}")
-        return get_empty_extraction()
+        print(f"Metadata extraction error: {e}")
+        return {}
+
+
+async def generate_title(summary: str) -> str | None:
+    """Step 2: Generate a descriptive title from the summary."""
+    try:
+        prompt = TITLE_PROMPT.format(summary=summary)
+        response = await call_ollama(prompt)
+
+        # Clean up the response - remove quotes, newlines
+        title = response.strip().strip('"\'').split('\n')[0]
+
+        # Sanity check - title should be reasonable length
+        if title and 3 <= len(title) <= 100:
+            return title
+        return None
+    except Exception as e:
+        print(f"Title generation error: {e}")
+        return None
+
+
+async def generate_summary(text: str) -> str | None:
+    """Step 3: Generate a summary in the document's language."""
+    truncated = text[:4000]
+
+    try:
+        response = await call_ollama(SUMMARY_PROMPT.format(text=truncated))
+
+        # Clean up - take first 1-2 sentences
+        summary = response.strip()
+        if summary:
+            return summary
+        return None
+    except Exception as e:
+        print(f"Summary generation error: {e}")
+        return None
 
 
 async def extract_document_data(text: str) -> dict[str, Any]:
     """
-    Extract structured data from document text.
+    Extract structured data from document text using multi-step extraction.
 
     Args:
         text: Document text (from OCR)
@@ -125,13 +191,32 @@ async def extract_document_data(text: str) -> dict[str, Any]:
     Returns:
         Dict with extracted fields
     """
-    # Try Ollama first
-    if await check_ollama_available():
-        return await extract_with_ollama(text)
+    if not await check_ollama_available():
+        print("Warning: Ollama not available, skipping extraction")
+        return get_empty_extraction()
 
-    # No LLM available
-    print("Warning: Ollama not available, skipping extraction")
-    return get_empty_extraction()
+    # Step 1: Extract metadata
+    print("  Step 1: Extracting metadata...")
+    metadata = await extract_metadata(text)
+
+    # Step 2: Generate summary
+    print("  Step 2: Generating summary...")
+    summary = await generate_summary(text)
+
+    # Step 3: Generate title from summary
+    print("  Step 3: Generating title...")
+    title = await generate_title(summary) if summary else None
+
+    # Combine results
+    return {
+        "title": title,
+        "counterparty": metadata.get("counterparty"),
+        "affected_person": metadata.get("affected_person"),
+        "category": metadata.get("category"),
+        "reference": metadata.get("reference"),
+        "document_date": metadata.get("document_date"),
+        "summary": summary,
+    }
 
 
 async def process_document_extraction(doc_id: str, text: str) -> dict[str, Any]:

@@ -60,9 +60,6 @@ def row_to_document(row: dict, tags: list[Tag] = None) -> Document:
         affected_person=row.get("affected_person"),
         category=row.get("category"),
         reference=row.get("reference"),
-        due_date=row.get("due_date"),
-        amount=row.get("amount"),
-        currency=row.get("currency") or "EUR",
         tags=tags or [],
     )
 

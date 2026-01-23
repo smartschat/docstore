@@ -41,8 +41,6 @@
 		'other'
 	];
 
-	const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF'];
-
 	let editData = {
 		title: '',
 		summary: '',
@@ -50,10 +48,7 @@
 		affected_person: '',
 		reference: '',
 		category: '',
-		document_date: '',
-		due_date: '',
-		amount: null as number | null,
-		currency: 'EUR'
+		document_date: ''
 	};
 
 	$: docId = $page.params.id as string;
@@ -127,10 +122,7 @@
 			affected_person: document.affected_person || '',
 			reference: document.reference || '',
 			category: document.category || '',
-			document_date: document.document_date || '',
-			due_date: document.due_date || '',
-			amount: document.amount,
-			currency: document.currency || 'EUR'
+			document_date: document.document_date || ''
 		};
 		editMode = true;
 	}
@@ -159,10 +151,6 @@
 				updateData.category = editData.category || null;
 			if (editData.document_date !== (document?.document_date || ''))
 				updateData.document_date = editData.document_date || null;
-			if (editData.due_date !== (document?.due_date || ''))
-				updateData.due_date = editData.due_date || null;
-			if (editData.amount !== document?.amount) updateData.amount = editData.amount;
-			if (editData.currency !== (document?.currency || 'EUR')) updateData.currency = editData.currency;
 
 			if (Object.keys(updateData).length > 0) {
 				await updateDocument(docId, updateData);
@@ -183,14 +171,6 @@
 			month: 'long',
 			day: 'numeric'
 		});
-	}
-
-	function formatCurrency(amount: number | null, currency: string = 'EUR'): string {
-		if (amount === null) return '-';
-		return new Intl.NumberFormat('de-DE', {
-			style: 'currency',
-			currency
-		}).format(amount);
 	}
 
 	function formatFileSize(bytes: number | null): string {
@@ -387,47 +367,12 @@
 								</select>
 							</div>
 
-							<div class="grid grid-cols-2 gap-3">
-								<div>
-									<label for="edit-amount" class="block text-sm font-medium text-slate-500">Amount</label>
-									<input
-										id="edit-amount"
-										type="number"
-										step="0.01"
-										bind:value={editData.amount}
-										class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500"
-									/>
-								</div>
-								<div>
-									<label for="edit-currency" class="block text-sm font-medium text-slate-500">Currency</label>
-									<select
-										id="edit-currency"
-										bind:value={editData.currency}
-										class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500"
-									>
-										{#each CURRENCIES as cur}
-											<option value={cur}>{cur}</option>
-										{/each}
-									</select>
-								</div>
-							</div>
-
 							<div>
 								<label for="edit-document-date" class="block text-sm font-medium text-slate-500">Document Date</label>
 								<input
 									id="edit-document-date"
 									type="date"
 									bind:value={editData.document_date}
-									class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500"
-								/>
-							</div>
-
-							<div>
-								<label for="edit-due-date" class="block text-sm font-medium text-slate-500">Due Date</label>
-								<input
-									id="edit-due-date"
-									type="date"
-									bind:value={editData.due_date}
 									class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500"
 								/>
 							</div>
@@ -463,26 +408,10 @@
 								</div>
 							{/if}
 
-							{#if document.amount !== null}
-								<div>
-									<dt class="text-sm font-medium text-slate-500">Amount</dt>
-									<dd class="mt-1 text-sm text-slate-900 font-semibold">
-										{formatCurrency(document.amount, document.currency)}
-									</dd>
-								</div>
-							{/if}
-
 							<div>
 								<dt class="text-sm font-medium text-slate-500">Document Date</dt>
 								<dd class="mt-1 text-sm text-slate-900">{formatDate(document.document_date)}</dd>
 							</div>
-
-							{#if document.due_date}
-								<div>
-									<dt class="text-sm font-medium text-slate-500">Due Date</dt>
-									<dd class="mt-1 text-sm text-slate-900">{formatDate(document.due_date)}</dd>
-								</div>
-							{/if}
 
 							<div>
 								<dt class="text-sm font-medium text-slate-500">Pages</dt>
