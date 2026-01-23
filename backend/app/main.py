@@ -36,6 +36,33 @@ from app.routers import documents, search, qa
 settings = get_settings()
 
 
+async def recover_stuck_documents() -> int:
+    """Fix documents stuck in 'processing' state from interrupted processing."""
+    import aiosqlite
+    from datetime import datetime
+
+    async with aiosqlite.connect(settings.database_path) as db:
+        # Documents with completed extraction but stuck in processing
+        cursor = await db.execute("""
+            UPDATE documents
+            SET status = 'completed', processed_at = ?
+            WHERE status = 'processing' AND extraction_status = 'completed'
+        """, (datetime.utcnow().isoformat(),))
+        completed_count = cursor.rowcount
+        await db.commit()
+
+        # Documents stuck in processing without extraction (mark for retry)
+        cursor = await db.execute("""
+            UPDATE documents
+            SET status = 'completed', extraction_status = 'pending'
+            WHERE status = 'processing' AND (extraction_status IS NULL OR extraction_status = 'pending')
+        """)
+        pending_count = cursor.rowcount
+        await db.commit()
+
+        return completed_count + pending_count
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan management."""
@@ -44,6 +71,11 @@ async def lifespan(app: FastAPI):
 
     # Initialize database
     await init_database()
+
+    # Recover any documents stuck from previous interrupted run
+    recovered = await recover_stuck_documents()
+    if recovered:
+        print(f"Recovered {recovered} documents stuck in processing")
 
     # Clean up expired sessions
     await cleanup_expired_sessions()
