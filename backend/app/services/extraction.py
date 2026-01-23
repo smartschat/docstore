@@ -1,8 +1,9 @@
 """LLM-powered structured data extraction using Ollama."""
 
 import json
-from typing import Any
 from datetime import date
+from typing import Any
+
 import httpx
 
 from app.config import get_settings

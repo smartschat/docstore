@@ -8,10 +8,10 @@ from fastapi import APIRouter, Depends
 from app.auth import get_current_session
 from app.config import get_settings
 from app.models import (
-    QuestionRequest,
-    QuestionResponse,
     Document,
     DocumentStatus,
+    QuestionRequest,
+    QuestionResponse,
     Tag,
 )
 from app.services.qa import answer_question

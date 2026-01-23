@@ -14,11 +14,11 @@ from app.config import get_settings
 from app.models import (
     Document,
     DocumentList,
-    DocumentUpdate,
     DocumentStatus,
+    DocumentUpdate,
     Tag,
 )
-from app.services.watcher import process_document, get_mime_type
+from app.services.watcher import get_mime_type, process_document
 
 settings = get_settings()
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -332,16 +332,20 @@ async def get_thumbnail(
         thumb_path.parent.mkdir(parents=True, exist_ok=True)
 
         try:
-            from PIL import Image
             import subprocess
+
+            from PIL import Image
 
             if row["mime_type"] == "application/pdf":
                 # Use pdftoppm to convert first page
                 # -singlefile outputs without page number suffix
                 # Output path without .png since pdftoppm adds it
                 output_base = str(thumb_path).removesuffix(".png")
-                result = subprocess.run(
-                    ["pdftoppm", "-png", "-f", "1", "-singlefile", "-scale-to", "300", str(file_path), output_base],
+                subprocess.run(
+                    [
+                        "pdftoppm", "-png", "-f", "1", "-singlefile",
+                        "-scale-to", "300", str(file_path), output_base
+                    ],
                     capture_output=True,
                 )
             else:

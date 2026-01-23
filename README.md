@@ -186,6 +186,9 @@ make frontend
 # Build frontend for production
 make build
 
+# Run linters
+make lint
+
 # Clean build artifacts
 make clean
 

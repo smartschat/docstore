@@ -1,4 +1,4 @@
-.PHONY: help install dev backend frontend build clean docker-build docker-run docker-stop db-init process-inbox add update
+.PHONY: help install dev backend frontend build clean lint docker-build docker-run docker-stop db-init process-inbox add update
 
 # Default target
 help:
@@ -10,6 +10,7 @@ help:
 	@echo "  make backend       Run backend only"
 	@echo "  make frontend      Run frontend only"
 	@echo "  make build         Build frontend for production"
+	@echo "  make lint          Run linters (ruff + svelte-check)"
 	@echo "  make clean         Remove build artifacts"
 	@echo "  make docker-build  Build production Docker image"
 	@echo "  make docker-run    Run production container locally"
@@ -47,6 +48,14 @@ build:
 	@echo "Building frontend..."
 	cd frontend && npm run build
 	@echo "Build complete. Static files in frontend/build/"
+
+# Lint
+lint:
+	@echo "Running Python linter (ruff)..."
+	cd backend && uv run ruff check app/
+	@echo "Running Svelte/TypeScript checker..."
+	cd frontend && npm run check
+	@echo "All checks passed!"
 
 # Clean
 clean:

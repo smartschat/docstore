@@ -1,10 +1,11 @@
 """Vector embeddings and semantic search using ONNX Runtime (ARM compatible)."""
 
-import json
-from typing import Optional
-from pathlib import Path
-import aiosqlite
 import asyncio
+import json
+from pathlib import Path
+from typing import Optional
+
+import aiosqlite
 import numpy as np
 
 from app.config import get_settings

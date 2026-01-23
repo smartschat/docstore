@@ -4,7 +4,6 @@ import asyncio
 import tempfile
 from pathlib import Path
 from typing import Optional
-import subprocess
 
 from app.config import get_settings
 

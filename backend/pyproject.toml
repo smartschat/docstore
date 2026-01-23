@@ -29,6 +29,7 @@ dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.23.0",
     "httpx>=0.26.0",
+    "ruff>=0.6.8",
 ]
 
 [build-system]
@@ -37,3 +38,18 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["app"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# SQL strings and long expressions are more readable on single lines
+"app/database.py" = ["E501"]
+"app/main.py" = ["E501"]
+"app/routers/*.py" = ["E501"]
+"app/services/*.py" = ["E501"]

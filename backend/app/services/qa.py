@@ -1,8 +1,9 @@
 """Question answering service using RAG with Ollama."""
 
 from typing import Optional
-import httpx
+
 import aiosqlite
+import httpx
 
 from app.config import get_settings
 from app.services.embeddings import semantic_search

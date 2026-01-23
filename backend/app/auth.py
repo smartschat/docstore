@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import aiosqlite
-from fastapi import Cookie, HTTPException, status, Request, Response
+from fastapi import Cookie, HTTPException, Request, Response, status
 
 from app.config import get_settings
 

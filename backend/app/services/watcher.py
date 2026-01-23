@@ -9,14 +9,14 @@ from pathlib import Path
 from typing import Optional
 
 import aiosqlite
+from watchdog.events import FileCreatedEvent, FileSystemEventHandler
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileCreatedEvent
 
 from app.config import get_settings
-from app.services.ocr import extract_text_from_file
-from app.services.extraction import process_document_extraction
-from app.services.embeddings import embed_document
 from app.models import DocumentStatus
+from app.services.embeddings import embed_document
+from app.services.extraction import process_document_extraction
+from app.services.ocr import extract_text_from_file
 
 settings = get_settings()
 

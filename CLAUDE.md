@@ -20,6 +20,9 @@ make frontend
 # Build frontend for production
 make build
 
+# Run linters (ruff for Python, svelte-check for frontend)
+make lint
+
 # Initialize database manually
 make db-init
 

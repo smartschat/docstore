@@ -4,42 +4,42 @@ import asyncio
 from contextlib import asynccontextmanager
 
 import aiosqlite
-from fastapi import FastAPI, Depends, Response, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import get_settings
-from app.database import init_database
 from app.auth import (
-    verify_password,
-    generate_session_token,
+    cleanup_expired_sessions,
+    clear_session_cookie,
     create_session,
     delete_session,
+    generate_session_token,
     get_current_session,
     set_session_cookie,
-    clear_session_cookie,
-    cleanup_expired_sessions,
-    validate_session,
+    verify_password,
 )
+from app.config import get_settings
+from app.database import init_database
 from app.models import (
-    LoginRequest,
-    LoginResponse,
     AuthStatus,
     DashboardStats,
     Document,
     DocumentStatus,
+    LoginRequest,
+    LoginResponse,
     Tag,
 )
-from app.services.watcher import folder_watcher, process_existing_inbox, process_document
-from app.services.queue import start_queue_processor, stop_queue_processor, get_queue_stats
-from app.routers import documents, search, qa
+from app.routers import documents, qa, search
+from app.services.queue import get_queue_stats, start_queue_processor, stop_queue_processor
+from app.services.watcher import folder_watcher, process_existing_inbox
 
 settings = get_settings()
 
 
 async def recover_stuck_documents() -> int:
     """Fix documents stuck in 'processing' state from interrupted processing."""
-    import aiosqlite
     from datetime import datetime
+
+    import aiosqlite
 
     async with aiosqlite.connect(settings.database_path) as db:
         # Documents with completed extraction but stuck in processing
@@ -249,14 +249,13 @@ async def reprocess_document(
     _: str = Depends(get_current_session),
 ):
     """Re-run extraction on a document."""
-    from pathlib import Path
-    from app.services.ocr import extract_text_from_file
-    from app.services.extraction import process_document_extraction
     from app.services.embeddings import embed_document
+    from app.services.extraction import process_document_extraction
+    from app.services.ocr import extract_text_from_file
     from app.services.watcher import (
-        update_document_status,
-        update_document_ocr,
         update_document_extraction,
+        update_document_ocr,
+        update_document_status,
     )
 
     async with aiosqlite.connect(settings.database_path) as db:
@@ -309,8 +308,8 @@ async def reprocess_document(
 
 # Serve static frontend files in production
 if settings.static_dir.exists() and (settings.static_dir / "index.html").exists():
-    from fastapi.staticfiles import StaticFiles
     from fastapi.responses import FileResponse
+    from fastapi.staticfiles import StaticFiles
 
     # Mount static subdirectories if they exist
     for subdir in ["_app", "assets"]:

@@ -1,7 +1,7 @@
 """Search endpoints."""
 
-from typing import Optional
 from datetime import datetime
+from typing import Optional
 
 import aiosqlite
 from fastapi import APIRouter, Depends, Query
@@ -9,11 +9,11 @@ from fastapi import APIRouter, Depends, Query
 from app.auth import get_current_session
 from app.config import get_settings
 from app.models import (
-    SearchQuery,
-    SearchResult,
-    SearchResponse,
     Document,
     DocumentStatus,
+    SearchQuery,
+    SearchResponse,
+    SearchResult,
     Tag,
 )
 from app.services.embeddings import semantic_search
