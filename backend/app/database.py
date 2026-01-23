@@ -179,7 +179,8 @@ async def init_database() -> None:
 
         await db.commit()
 
-    # Create vector table using sync connection (sqlite-vec doesn't work well with aiosqlite threading)
+    # Create vector table - try sqlite-vec first, fall back to regular table
+    vec_table_created = False
     try:
         import sqlite_vec
         sync_conn = sqlite3.connect(str(settings.database_path))
@@ -190,13 +191,27 @@ async def init_database() -> None:
         sync_conn.execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS document_embeddings USING vec0(
                 doc_id TEXT PRIMARY KEY,
-                embedding FLOAT[1536]
+                embedding FLOAT[384]
             )
         """)
         sync_conn.commit()
         sync_conn.close()
-        print("Vector table created successfully")
+        vec_table_created = True
+        print("Vector table created successfully (sqlite-vec)")
     except Exception as e:
-        print(f"Note: Vector table not created (sqlite-vec may not be installed): {e}")
+        print(f"Note: sqlite-vec not available ({e})")
+
+    # Fallback: create regular table for embeddings stored as JSON
+    if not vec_table_created:
+        async with aiosqlite.connect(settings.database_path) as db:
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS document_embeddings (
+                    doc_id TEXT PRIMARY KEY,
+                    embedding TEXT NOT NULL,
+                    FOREIGN KEY (doc_id) REFERENCES documents(id) ON DELETE CASCADE
+                )
+            """)
+            await db.commit()
+        print("Vector table created successfully (JSON fallback)")
 
     print("Database initialized successfully")
