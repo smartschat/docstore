@@ -191,7 +191,7 @@
 		<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 			<!-- PDF Viewer -->
 			<div class="lg:col-span-2">
-				<div class="bg-white rounded-xl shadow-sm overflow-hidden">
+				<div class="bg-white rounded-xl shadow-sm overflow-hidden h-[calc(100vh-12rem)]">
 					<PdfViewer url={getDocumentFileUrl(docId)} />
 				</div>
 			</div>
