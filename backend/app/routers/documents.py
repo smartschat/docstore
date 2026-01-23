@@ -286,9 +286,10 @@ async def delete_document(
 @router.get("/{doc_id}/file")
 async def download_file(
     doc_id: str,
+    download: bool = False,
     _: str = Depends(get_current_session),
 ):
-    """Download the original document file."""
+    """Download or view the original document file."""
     row = await get_document_by_id(doc_id)
     if not row:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -297,10 +298,16 @@ async def download_file(
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
 
+    headers = {}
+    if download:
+        headers["Content-Disposition"] = f'attachment; filename="{row["filename"]}"'
+    else:
+        headers["Content-Disposition"] = "inline"
+
     return FileResponse(
         path=file_path,
-        filename=row["filename"],
         media_type=row["mime_type"],
+        headers=headers,
     )
 
 
@@ -332,13 +339,13 @@ async def get_thumbnail(
 
             if row["mime_type"] == "application/pdf":
                 # Use pdftoppm to convert first page
+                # -singlefile outputs without page number suffix
+                # Output path without .png since pdftoppm adds it
+                output_base = str(thumb_path).removesuffix(".png")
                 result = subprocess.run(
-                    ["pdftoppm", "-png", "-f", "1", "-l", "1", "-scale-to", "300", str(file_path), "-"],
+                    ["pdftoppm", "-png", "-f", "1", "-singlefile", "-scale-to", "300", str(file_path), output_base],
                     capture_output=True,
                 )
-                if result.returncode == 0:
-                    with open(thumb_path, "wb") as f:
-                        f.write(result.stdout)
             else:
                 # Image file - resize
                 img = Image.open(file_path)
