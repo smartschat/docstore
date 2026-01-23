@@ -76,6 +76,7 @@ async def init_database() -> None:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 processed_at TIMESTAMP,
                 status TEXT DEFAULT 'pending',
+                extraction_status TEXT,
                 -- Extracted fields
                 title TEXT,
                 counterparty TEXT,
@@ -84,6 +85,12 @@ async def init_database() -> None:
                 reference TEXT
             )
         """)
+
+        # Migration: Add extraction_status column if it doesn't exist
+        cursor = await db.execute("PRAGMA table_info(documents)")
+        columns = [row[1] for row in await cursor.fetchall()]
+        if "extraction_status" not in columns:
+            await db.execute("ALTER TABLE documents ADD COLUMN extraction_status TEXT")
 
         # Create index on file_hash for deduplication
         await db.execute("""
@@ -95,6 +102,12 @@ async def init_database() -> None:
         await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_documents_status
             ON documents(status)
+        """)
+
+        # Create index on extraction_status for queue processing
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_documents_extraction_status
+            ON documents(extraction_status)
         """)
 
         # FTS5 for full-text search

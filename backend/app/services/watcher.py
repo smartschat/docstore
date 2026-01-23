@@ -139,6 +139,16 @@ async def update_document_extraction(doc_id: str, data: dict) -> None:
         await db.commit()
 
 
+async def update_extraction_status(doc_id: str, status: str) -> None:
+    """Update document extraction status (pending, completed, or None)."""
+    async with aiosqlite.connect(settings.database_path) as db:
+        await db.execute(
+            "UPDATE documents SET extraction_status = ? WHERE id = ?",
+            (status, doc_id)
+        )
+        await db.commit()
+
+
 async def process_document(file_path: Path) -> Optional[str]:
     """
     Process a single document through the full pipeline.
@@ -204,15 +214,22 @@ async def process_document(file_path: Path) -> Optional[str]:
 
         await update_document_ocr(doc_id, ocr_result.text, ocr_result.page_count)
 
-        # Run extraction if we have text and API key
-        if ocr_result.text and settings.openai_api_key:
-            extraction_result = await process_document_extraction(doc_id, ocr_result.text)
-            await update_document_extraction(doc_id, extraction_result)
+        # Run extraction if we have text
+        if ocr_result.text:
+            from app.services.extraction import check_ollama_available
 
-            # Generate and store embedding
+            if await check_ollama_available():
+                extraction_result = await process_document_extraction(doc_id, ocr_result.text)
+                await update_document_extraction(doc_id, extraction_result)
+                await update_extraction_status(doc_id, "completed")
+            else:
+                print(f"Ollama unavailable - queueing extraction for {doc_id}")
+                await update_extraction_status(doc_id, "pending")
+
+            # Embeddings use local model, always run
             await embed_document(doc_id, ocr_result.text)
 
-        # Mark as completed
+        # Mark as completed (document is searchable by text/filename)
         await update_document_status(doc_id, DocumentStatus.COMPLETED)
         print(f"Successfully processed document: {doc_id}")
 

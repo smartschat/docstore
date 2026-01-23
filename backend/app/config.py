@@ -53,6 +53,13 @@ class Settings(BaseSettings):
         "image/tiff",
     ]
 
+    # Extraction queue
+    queue_check_interval: int = 60  # seconds
+    queue_batch_size: int = 5
+
+    # Static files (for production)
+    static_dir: Path = Path("./static")
+
     @property
     def database_url(self) -> str:
         return f"sqlite+aiosqlite:///{self.database_path}"

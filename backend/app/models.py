@@ -62,6 +62,7 @@ class Document(DocumentBase):
     created_at: datetime
     processed_at: Optional[datetime] = None
     status: DocumentStatus = DocumentStatus.PENDING
+    extraction_status: Optional[str] = None  # pending, completed, or None
     # Extracted fields
     title: Optional[str] = None
     counterparty: Optional[str] = None

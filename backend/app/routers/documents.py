@@ -69,6 +69,7 @@ def row_to_document(row: dict, tags: list[Tag] = None) -> Document:
         created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else datetime.utcnow(),
         processed_at=datetime.fromisoformat(row["processed_at"]) if row["processed_at"] else None,
         status=DocumentStatus(row["status"]) if row["status"] else DocumentStatus.PENDING,
+        extraction_status=row.get("extraction_status"),
         title=row.get("title"),
         counterparty=row.get("counterparty"),
         affected_person=row.get("affected_person"),

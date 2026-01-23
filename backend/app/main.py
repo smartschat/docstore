@@ -30,6 +30,7 @@ from app.models import (
     Tag,
 )
 from app.services.watcher import folder_watcher, process_existing_inbox, process_document
+from app.services.queue import start_queue_processor, stop_queue_processor, get_queue_stats
 from app.routers import documents, search, qa
 
 settings = get_settings()
@@ -56,10 +57,14 @@ async def lifespan(app: FastAPI):
     if existing:
         print(f"Processed {len(existing)} existing files from inbox")
 
+    # Start extraction queue processor
+    start_queue_processor()
+
     yield
 
     # Shutdown
     print("Shutting down DocStore...")
+    stop_queue_processor()
     folder_watcher.stop()
 
 
@@ -157,7 +162,7 @@ async def get_stats(_: str = Depends(get_current_session)):
         cursor = await db.execute(
             "SELECT status, COUNT(*) as count FROM documents GROUP BY status"
         )
-        by_status = {row["status"]: row["count"] for row in await cursor.fetchall()}
+        by_status = {row["status"] or "unknown": row["count"] for row in await cursor.fetchall()}
 
         # Recent documents
         cursor = await db.execute(
@@ -183,6 +188,7 @@ async def get_stats(_: str = Depends(get_current_session)):
                 created_at=datetime.fromisoformat(row_dict["created_at"]) if row_dict["created_at"] else datetime.utcnow(),
                 processed_at=datetime.fromisoformat(row_dict["processed_at"]) if row_dict["processed_at"] else None,
                 status=DocumentStatus(row_dict["status"]) if row_dict["status"] else DocumentStatus.PENDING,
+                extraction_status=row_dict.get("extraction_status"),
                 title=row_dict.get("title"),
                 counterparty=row_dict.get("counterparty"),
                 affected_person=row_dict.get("affected_person"),
@@ -197,6 +203,12 @@ async def get_stats(_: str = Depends(get_current_session)):
             documents_by_status=by_status,
             recent_documents=recent,
         )
+
+
+@app.get("/api/queue/stats")
+async def queue_stats(_: str = Depends(get_current_session)):
+    """Get extraction queue statistics."""
+    return await get_queue_stats()
 
 
 @app.post("/api/reprocess/{doc_id}")
@@ -242,9 +254,17 @@ async def reprocess_document(
         await update_document_ocr(doc_id, ocr_result.text, ocr_result.page_count)
 
         # Re-run extraction
-        if ocr_result.text and settings.openai_api_key:
-            extraction_result = await process_document_extraction(doc_id, ocr_result.text)
-            await update_document_extraction(doc_id, extraction_result)
+        if ocr_result.text:
+            from app.services.extraction import check_ollama_available
+            from app.services.watcher import update_extraction_status
+
+            if await check_ollama_available():
+                extraction_result = await process_document_extraction(doc_id, ocr_result.text)
+                await update_document_extraction(doc_id, extraction_result)
+                await update_extraction_status(doc_id, "completed")
+            else:
+                await update_extraction_status(doc_id, "pending")
+
             await embed_document(doc_id, ocr_result.text)
 
         await update_document_status(doc_id, DocumentStatus.COMPLETED)
@@ -253,6 +273,27 @@ async def reprocess_document(
     except Exception as e:
         await update_document_status(doc_id, DocumentStatus.FAILED)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# Serve static frontend files in production
+if settings.static_dir.exists():
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse
+
+    # Serve static assets (JS, CSS, images)
+    app.mount("/assets", StaticFiles(directory=settings.static_dir / "assets"), name="assets")
+    app.mount("/_app", StaticFiles(directory=settings.static_dir / "_app"), name="svelte_app")
+
+    # SPA fallback - serve index.html for all non-API routes
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """Serve the SPA for all non-API routes."""
+        # Check if it's a static file that exists
+        static_file = settings.static_dir / full_path
+        if static_file.is_file():
+            return FileResponse(static_file)
+        # Otherwise serve index.html for SPA routing
+        return FileResponse(settings.static_dir / "index.html")
 
 
 if __name__ == "__main__":
