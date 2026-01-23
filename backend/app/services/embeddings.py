@@ -14,11 +14,12 @@ _model = None
 
 
 def get_model():
-    """Get or load the sentence-transformers model."""
+    """Get or load the sentence-transformers model with ONNX backend for ARM compatibility."""
     global _model
     if _model is None:
         from sentence_transformers import SentenceTransformer
-        _model = SentenceTransformer('all-MiniLM-L6-v2')
+        # Use ONNX backend for ARM/cross-platform compatibility
+        _model = SentenceTransformer('all-MiniLM-L6-v2', backend='onnx')
     return _model
 
 

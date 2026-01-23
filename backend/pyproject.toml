@@ -21,6 +21,7 @@ dependencies = [
     "python-jose[cryptography]>=3.3.0",
     "reportlab>=4.4.9",
     "sentence-transformers>=5.2.0",
+    "onnxruntime>=1.23.2",
 ]
 
 [dependency-groups]
