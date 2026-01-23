@@ -1,17 +1,17 @@
 # DocStore
 
-A self-hosted document management system with OCR, semantic search, and LLM-powered data extraction. Designed to run on a Raspberry Pi (4-8GB) with cloud API calls for AI features.
+A self-hosted document management system with OCR, semantic search, and LLM-powered data extraction. Designed to run on a Raspberry Pi with local embeddings and Ollama for LLM features.
 
 ## Features
 
 - **Document Ingestion**: Upload PDFs and images via web UI or drop files in the inbox folder
 - **OCR Processing**: Automatic text extraction using ocrmypdf with German + English support
-- **AI Classification**: Automatic document type detection (invoices, receipts, bank statements, tax documents)
-- **Structured Extraction**: Extract vendor, amounts, dates, and line items from documents
-- **Semantic Search**: Find documents by meaning, not just keywords
+- **AI Classification**: Automatic document categorization via Ollama LLM
+- **Structured Extraction**: Extract title, counterparty, dates, and amounts from documents
+- **Semantic Search**: Find documents by meaning using local ONNX embeddings (ARM compatible)
 - **Q&A Interface**: Ask questions about your documents using RAG
 - **Tag Management**: Organize documents with custom tags
-- **Spending Analytics**: Track spending from invoices and receipts
+- **Extraction Queue**: Documents arriving when Ollama is offline are queued for later processing
 
 ## Quick Start
 
@@ -37,7 +37,7 @@ make install
 
 # Create .env file
 cp .env.example backend/.env
-# Edit backend/.env and set your password and OpenAI API key
+# Edit backend/.env with your password and Ollama server address
 
 # Start development servers
 make dev
@@ -56,13 +56,27 @@ Create a `.env` file in the `backend/` directory:
 AUTH_PASSWORD=your-secure-password
 SECRET_KEY=your-secret-key-for-sessions
 
-# OpenAI (required for AI features)
-OPENAI_API_KEY=sk-...
+# Ollama (for LLM extraction and Q&A)
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen3:1.7b
 
 # Optional
 DEBUG=false
 OCR_LANGUAGE=deu+eng
 ```
+
+### Ollama Setup
+
+The LLM features (extraction, Q&A) require an Ollama server running on your network:
+
+```bash
+# On a Mac or other machine with more RAM
+brew install ollama
+ollama pull qwen3:1.7b
+OLLAMA_HOST=0.0.0.0 ollama serve  # Listen on network
+```
+
+Documents uploaded when Ollama is unavailable will have their extraction queued and processed automatically when Ollama comes back online.
 
 ## Usage
 
@@ -86,14 +100,20 @@ See the API documentation at http://localhost:8000/docs
 ## Docker Deployment
 
 ```bash
-# Build and start containers
-docker-compose up -d
+# Build the image
+docker build -t docstore .
+
+# Run with a volume for data persistence
+docker run -d \
+  --name docstore \
+  -p 8000:8000 \
+  -v docstore-data:/app/data \
+  -e AUTH_PASSWORD=your-password \
+  -e OLLAMA_BASE_URL=http://your-ollama-host:11434 \
+  docstore
 
 # View logs
-docker-compose logs -f
-
-# Stop containers
-docker-compose down
+docker logs -f docstore
 ```
 
 ## Architecture
@@ -109,12 +129,13 @@ docstore/
 │   │   ├── models.py         # Pydantic models
 │   │   ├── services/         # Business logic
 │   │   │   ├── ocr.py        # OCR processing
-│   │   │   ├── extraction.py # LLM extraction
-│   │   │   ├── embeddings.py # Vector search
+│   │   │   ├── extraction.py # LLM extraction (Ollama)
+│   │   │   ├── embeddings.py # Vector search (ONNX)
+│   │   │   ├── queue.py      # Extraction queue processor
 │   │   │   ├── watcher.py    # Folder watcher
 │   │   │   └── qa.py         # Q&A service
 │   │   └── routers/          # API endpoints
-│   └── requirements.txt
+│   └── pyproject.toml
 ├── frontend/         # SvelteKit frontend
 │   ├── src/
 │   │   ├── routes/           # Pages
@@ -127,19 +148,16 @@ docstore/
 │   ├── inbox/        # Drop files here
 │   ├── archive/      # Processed files
 │   └── docstore.db   # SQLite database
-└── docker-compose.yml
+└── Dockerfile        # Production build
 ```
 
 ## Database Schema
 
-- `documents`: Core document metadata and OCR text
-- `invoices`: Extracted invoice data
-- `receipts`: Extracted receipt data
-- `bank_statements`: Extracted bank statement data
-- `tax_documents`: Extracted tax document data
+- `documents`: Core document metadata, OCR text, and extracted fields (title, counterparty, category, etc.)
 - `tags` / `document_tags`: Tag system
-- `document_embeddings`: Vector embeddings for semantic search
+- `document_embeddings`: Vector embeddings for semantic search (384-dim)
 - `documents_fts`: Full-text search index
+- `sessions`: Authentication sessions
 
 ## API Endpoints
 
@@ -183,43 +201,27 @@ cd backend && uv run uvicorn app.main:app --reload
 
 ## Raspberry Pi Deployment
 
-For Raspberry Pi 4 (4GB+):
+For Raspberry Pi 4 (4GB+), Docker is recommended:
 
-1. Install system dependencies:
-   ```bash
-   sudo apt update
-   sudo apt install python3.11 nodejs npm
-   sudo apt install ocrmypdf tesseract-ocr tesseract-ocr-deu poppler-utils libmagic1
-   ```
+```bash
+# Install Docker
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+# Log out and back in
 
-2. Install uv:
-   ```bash
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   source ~/.bashrc  # or restart your shell
-   ```
+# Deploy
+docker build -t docstore .
+docker run -d \
+  --name docstore \
+  -p 8000:8000 \
+  -v docstore-data:/app/data \
+  -e AUTH_PASSWORD=your-password \
+  -e OLLAMA_BASE_URL=http://your-mac-ip:11434 \
+  --restart unless-stopped \
+  docstore
+```
 
-3. Clone and install:
-   ```bash
-   git clone <repo> docstore
-   cd docstore
-   make install
-   cp .env.example backend/.env
-   # Edit backend/.env with your settings
-   ```
-
-4. Create systemd service:
-   ```bash
-   sudo cp docstore.service /etc/systemd/system/
-   sudo systemctl daemon-reload
-   sudo systemctl enable docstore
-   sudo systemctl start docstore
-   ```
-
-5. Check status:
-   ```bash
-   sudo systemctl status docstore
-   sudo journalctl -u docstore -f  # View logs
-   ```
+Note: Embeddings use ONNX Runtime which runs natively on ARM. The Ollama server should run on a separate machine (e.g., Mac) as it requires more resources.
 
 ## License
 
