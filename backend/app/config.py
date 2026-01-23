@@ -29,11 +29,6 @@ class Settings(BaseSettings):
     archive_dir: Path = Path("../data/archive")
     database_path: Path = Path("../data/docstore.db")
 
-    # OpenAI (legacy, optional)
-    openai_api_key: str = ""
-    openai_embedding_model: str = "text-embedding-ada-002"
-    openai_chat_model: str = "gpt-5-nano"
-
     # Ollama (local LLM)
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3:1.7b"

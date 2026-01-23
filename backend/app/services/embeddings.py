@@ -297,7 +297,7 @@ async def _search_similar_fallback(
         async for row in cursor:
             doc_id = row[0]
             embedding = json.loads(row[1])
-            # Skip if dimensions don't match (old OpenAI embeddings)
+            # Skip if dimensions don't match
             if len(embedding) != len(query_embedding):
                 continue
             similarity = cosine_similarity(query_embedding, embedding)
