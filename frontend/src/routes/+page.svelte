@@ -1,12 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { getStats, getSpendingStats, search, type DashboardStats, type SpendingStats, type SearchResult } from '$lib/api';
+	import { getStats, search, type DashboardStats, type SearchResult } from '$lib/api';
 	import SearchBar from '$components/SearchBar.svelte';
 	import DocumentCard from '$components/DocumentCard.svelte';
 
 	let stats: DashboardStats | null = null;
-	let spending: SpendingStats | null = null;
 	let loading = true;
 	let searchQuery = '';
 	let searchResults: SearchResult[] = [];
@@ -14,7 +13,7 @@
 
 	onMount(async () => {
 		try {
-			[stats, spending] = await Promise.all([getStats(), getSpendingStats()]);
+			stats = await getStats();
 		} catch (error) {
 			console.error('Failed to load stats:', error);
 		} finally {
@@ -41,13 +40,6 @@
 		} finally {
 			isSearching = false;
 		}
-	}
-
-	function formatCurrency(amount: number, currency: string = 'EUR'): string {
-		return new Intl.NumberFormat('de-DE', {
-			style: 'currency',
-			currency
-		}).format(amount);
 	}
 
 	function getCategoryColor(category: string): string {
@@ -120,14 +112,12 @@
 				</p>
 			</div>
 
-			{#if spending}
-				<div class="bg-white rounded-xl shadow-sm p-6">
-					<p class="text-sm font-medium text-slate-500">Total Spending</p>
-					<p class="mt-2 text-3xl font-bold text-slate-900">
-						{formatCurrency(spending.total_spending)}
-					</p>
-				</div>
-			{/if}
+			<div class="bg-white rounded-xl shadow-sm p-6">
+				<p class="text-sm font-medium text-slate-500">Categories</p>
+				<p class="mt-2 text-3xl font-bold text-slate-900">
+					{Object.keys(stats.documents_by_category).filter(c => c !== 'uncategorized').length}
+				</p>
+			</div>
 		</div>
 
 		<!-- Document Categories -->
@@ -170,21 +160,5 @@
 			</div>
 		{/if}
 
-		<!-- Spending by Category -->
-		{#if spending && Object.keys(spending.spending_by_category).length > 0}
-			<div class="bg-white rounded-xl shadow-sm p-6">
-				<h3 class="text-lg font-semibold text-slate-900 mb-4">Spending by Category</h3>
-				<div class="space-y-3">
-					{#each Object.entries(spending.spending_by_category).sort((a, b) => b[1] - a[1]) as [category, amount]}
-						<div class="flex items-center justify-between">
-							<span class="text-sm text-slate-600 capitalize">{category}</span>
-							<span class="text-sm font-medium text-slate-900">
-								{formatCurrency(amount)}
-							</span>
-						</div>
-					{/each}
-				</div>
-			</div>
-		{/if}
 	{/if}
 </div>

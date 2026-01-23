@@ -18,6 +18,7 @@ export interface Document {
 	created_at: string;
 	processed_at: string | null;
 	status: 'pending' | 'processing' | 'completed' | 'failed';
+	extraction_status: 'pending' | 'completed' | null;
 	// Extracted fields
 	title: string | null;
 	counterparty: string | null;
@@ -274,6 +275,18 @@ export async function listTags(): Promise<Tag[]> {
 // Stats
 export async function getStats(): Promise<DashboardStats> {
 	return request('/stats');
+}
+
+export interface QueueStats {
+	pending: number;
+	completed: number;
+	no_status: number;
+	ollama_available: boolean;
+	queue_running: boolean;
+}
+
+export async function getQueueStats(): Promise<QueueStats> {
+	return request('/queue/stats');
 }
 
 // System
