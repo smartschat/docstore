@@ -165,8 +165,7 @@ Question: {question}"""
     response = await client.chat.completions.create(
         model=settings.openai_chat_model,
         messages=messages,
-        max_tokens=1000,
-        temperature=0.3,
+        max_completion_tokens=1000,
     )
 
     answer = response.choices[0].message.content.strip()
