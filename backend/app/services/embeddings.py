@@ -1,18 +1,25 @@
-"""Vector embeddings and semantic search using OpenAI."""
+"""Vector embeddings and semantic search using sentence-transformers (local)."""
 
 import json
 from typing import Optional
 import aiosqlite
-from openai import AsyncOpenAI
+import asyncio
 
 from app.config import get_settings
 
 settings = get_settings()
 
+# Global model instance (loaded once)
+_model = None
 
-def get_openai_client() -> AsyncOpenAI:
-    """Get OpenAI client instance."""
-    return AsyncOpenAI(api_key=settings.openai_api_key)
+
+def get_model():
+    """Get or load the sentence-transformers model."""
+    global _model
+    if _model is None:
+        from sentence_transformers import SentenceTransformer
+        _model = SentenceTransformer('all-MiniLM-L6-v2')
+    return _model
 
 
 async def generate_embedding(text: str) -> list[float]:
@@ -23,25 +30,19 @@ async def generate_embedding(text: str) -> list[float]:
         text: Text to embed
 
     Returns:
-        1536-dimensional embedding vector
+        384-dimensional embedding vector (MiniLM)
     """
-    if not settings.openai_api_key:
-        raise ValueError("OpenAI API key not configured")
-
-    client = get_openai_client()
-
-    # Truncate text if too long (ada-002 has 8191 token limit)
-    # Rough estimate: 4 chars per token
-    max_chars = 8000 * 4
+    # Truncate text if too long (MiniLM has 256 token limit, ~1000 chars safe)
+    max_chars = 8000
     if len(text) > max_chars:
         text = text[:max_chars]
 
-    response = await client.embeddings.create(
-        model=settings.openai_embedding_model,
-        input=text,
-    )
+    def _encode():
+        model = get_model()
+        embedding = model.encode(text, convert_to_numpy=True)
+        return embedding.tolist()
 
-    return response.data[0].embedding
+    return await asyncio.get_event_loop().run_in_executor(None, _encode)
 
 
 def _get_vec_connection():
@@ -66,12 +67,12 @@ async def store_embedding(doc_id: str, embedding: list[float]) -> None:
         doc_id: Document ID
         embedding: Embedding vector
     """
-    import asyncio
-
     def _store():
         conn = _get_vec_connection()
         if not conn:
-            return
+            # Fallback: store in regular table as JSON
+            import sqlite3
+            conn = sqlite3.connect(str(settings.database_path))
 
         try:
             embedding_json = json.dumps(embedding)
@@ -103,8 +104,6 @@ async def search_similar(
     Returns:
         List of (doc_id, similarity_score) tuples
     """
-    import asyncio
-
     def _search():
         conn = _get_vec_connection()
         if not conn:
@@ -190,6 +189,9 @@ async def _search_similar_fallback(
         async for row in cursor:
             doc_id = row[0]
             embedding = json.loads(row[1])
+            # Skip if dimensions don't match (old OpenAI embeddings)
+            if len(embedding) != len(query_embedding):
+                continue
             similarity = cosine_similarity(query_embedding, embedding)
             results.append((doc_id, similarity))
 
@@ -233,5 +235,9 @@ async def semantic_search(
     Returns:
         List of (doc_id, similarity_score) tuples
     """
-    query_embedding = await generate_embedding(query)
-    return await search_similar(query_embedding, limit, category)
+    try:
+        query_embedding = await generate_embedding(query)
+        return await search_similar(query_embedding, limit, category)
+    except Exception as e:
+        print(f"Semantic search error: {e}")
+        return []

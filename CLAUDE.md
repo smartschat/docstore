@@ -43,7 +43,7 @@ cd backend && uv run uvicorn app.main:app --reload
 - `app/database.py` - SQLite schema with FTS5 full-text search and sqlite-vec for vector embeddings
 - `app/services/ocr.py` - OCR processing using ocrmypdf
 - `app/services/extraction.py` - LLM-powered structured data extraction (title, counterparty, category, amounts, dates)
-- `app/services/embeddings.py` - OpenAI embeddings with sqlite-vec for semantic search, includes Python fallback
+- `app/services/embeddings.py` - Local embeddings using sentence-transformers (all-MiniLM-L6-v2, 384 dims), runs on Pi
 - `app/services/qa.py` - RAG-based Q&A using semantic search to find relevant documents
 - `app/services/watcher.py` - Watchdog-based folder monitor for auto-ingestion from `data/inbox/`
 - `app/routers/` - API endpoint modules (documents, search, qa)
@@ -64,7 +64,7 @@ cd backend && uv run uvicorn app.main:app --reload
 **Database**: SQLite with three search mechanisms:
 - `documents` table with extracted fields
 - `documents_fts` FTS5 virtual table for keyword search
-- `document_embeddings` vec0 table for semantic search (1536-dim OpenAI embeddings)
+- `document_embeddings` table for semantic search (384-dim MiniLM embeddings, local)
 
 ## Key Configuration
 
