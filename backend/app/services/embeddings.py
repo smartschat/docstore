@@ -1,26 +1,110 @@
-"""Vector embeddings and semantic search using sentence-transformers (local)."""
+"""Vector embeddings and semantic search using ONNX Runtime (ARM compatible)."""
 
 import json
 from typing import Optional
+from pathlib import Path
 import aiosqlite
 import asyncio
+import numpy as np
 
 from app.config import get_settings
 
 settings = get_settings()
 
-# Global model instance (loaded once)
-_model = None
+# Global model components (loaded once)
+_tokenizer = None
+_session = None
+_model_loaded = False
+
+# Model configuration
+MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+MODEL_DIR = Path.home() / ".cache" / "docstore" / "models" / "all-MiniLM-L6-v2"
 
 
-def get_model():
-    """Get or load the sentence-transformers model with ONNX backend for ARM compatibility."""
-    global _model
-    if _model is None:
-        from sentence_transformers import SentenceTransformer
-        # Use ONNX backend for ARM/cross-platform compatibility
-        _model = SentenceTransformer('all-MiniLM-L6-v2', backend='onnx')
-    return _model
+def _download_onnx_model():
+    """Download the ONNX model from Hugging Face if not cached."""
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+
+    model_path = MODEL_DIR / "model.onnx"
+    tokenizer_path = MODEL_DIR / "tokenizer.json"
+
+    if model_path.exists() and tokenizer_path.exists():
+        return model_path, tokenizer_path
+
+    print(f"Downloading ONNX model to {MODEL_DIR}...")
+    from huggingface_hub import hf_hub_download
+
+    # Download ONNX model
+    hf_hub_download(
+        repo_id=MODEL_NAME,
+        filename="onnx/model.onnx",
+        local_dir=MODEL_DIR,
+        local_dir_use_symlinks=False,
+    )
+    # Move from onnx subfolder
+    (MODEL_DIR / "onnx" / "model.onnx").rename(model_path)
+
+    # Download tokenizer
+    hf_hub_download(
+        repo_id=MODEL_NAME,
+        filename="tokenizer.json",
+        local_dir=MODEL_DIR,
+        local_dir_use_symlinks=False,
+    )
+
+    print("Model downloaded successfully")
+    return model_path, tokenizer_path
+
+
+def _load_model():
+    """Load the ONNX model and tokenizer."""
+    global _tokenizer, _session, _model_loaded
+
+    if _model_loaded:
+        return _session is not None
+
+    try:
+        model_path, tokenizer_path = _download_onnx_model()
+
+        # Load tokenizer
+        from tokenizers import Tokenizer
+        _tokenizer = Tokenizer.from_file(str(tokenizer_path))
+
+        # Load ONNX model
+        import onnxruntime as ort
+        _session = ort.InferenceSession(str(model_path), providers=['CPUExecutionProvider'])
+
+        _model_loaded = True
+        print("Embedding model loaded (ONNX)")
+        return True
+    except Exception as e:
+        print(f"Failed to load embedding model: {e}")
+        _model_loaded = True  # Don't retry
+        return False
+
+
+def _mean_pooling(model_output: np.ndarray, attention_mask: np.ndarray) -> np.ndarray:
+    """Apply mean pooling to get sentence embeddings."""
+    # model_output shape: (batch_size, sequence_length, hidden_size)
+    # attention_mask shape: (batch_size, sequence_length)
+
+    # Expand attention mask to match hidden size
+    mask_expanded = np.expand_dims(attention_mask, -1)  # (batch, seq, 1)
+    mask_expanded = np.broadcast_to(mask_expanded, model_output.shape)  # (batch, seq, hidden)
+
+    # Sum embeddings weighted by attention mask
+    sum_embeddings = np.sum(model_output * mask_expanded, axis=1)  # (batch, hidden)
+    sum_mask = np.sum(mask_expanded, axis=1)  # (batch, hidden)
+    sum_mask = np.clip(sum_mask, a_min=1e-9, a_max=None)  # Avoid division by zero
+
+    return sum_embeddings / sum_mask
+
+
+def _normalize(embeddings: np.ndarray) -> np.ndarray:
+    """L2 normalize embeddings."""
+    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+    norms = np.clip(norms, a_min=1e-9, a_max=None)
+    return embeddings / norms
 
 
 async def generate_embedding(text: str) -> list[float]:
@@ -33,15 +117,38 @@ async def generate_embedding(text: str) -> list[float]:
     Returns:
         384-dimensional embedding vector (MiniLM)
     """
-    # Truncate text if too long (MiniLM has 256 token limit, ~1000 chars safe)
-    max_chars = 8000
-    if len(text) > max_chars:
-        text = text[:max_chars]
-
     def _encode():
-        model = get_model()
-        embedding = model.encode(text, convert_to_numpy=True)
-        return embedding.tolist()
+        if not _load_model():
+            return None
+
+        # Truncate text if too long
+        max_chars = 8000
+        if len(text) > max_chars:
+            truncated = text[:max_chars]
+        else:
+            truncated = text
+
+        # Tokenize
+        encoded = _tokenizer.encode(truncated)
+        input_ids = np.array([encoded.ids], dtype=np.int64)
+        attention_mask = np.array([encoded.attention_mask], dtype=np.int64)
+        token_type_ids = np.zeros_like(input_ids)
+
+        # Run inference
+        outputs = _session.run(
+            None,
+            {
+                'input_ids': input_ids,
+                'attention_mask': attention_mask,
+                'token_type_ids': token_type_ids,
+            }
+        )
+
+        # Get sentence embedding via mean pooling
+        embeddings = _mean_pooling(outputs[0], attention_mask)
+        embeddings = _normalize(embeddings)
+
+        return embeddings[0].tolist()
 
     return await asyncio.get_event_loop().run_in_executor(None, _encode)
 
@@ -214,6 +321,8 @@ async def embed_document(doc_id: str, text: str) -> None:
 
     try:
         embedding = await generate_embedding(text)
+        if embedding is None:
+            return  # Model not available
         await store_embedding(doc_id, embedding)
     except Exception as e:
         # Embedding is optional - log but don't fail the document processing
@@ -238,6 +347,8 @@ async def semantic_search(
     """
     try:
         query_embedding = await generate_embedding(query)
+        if query_embedding is None:
+            return []  # Model not available
         return await search_similar(query_embedding, limit, category)
     except Exception as e:
         print(f"Semantic search error: {e}")
