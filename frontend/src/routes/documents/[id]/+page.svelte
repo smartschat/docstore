@@ -283,7 +283,7 @@
 			<!-- PDF Viewer -->
 			<div class="lg:col-span-2">
 				<div class="bg-white rounded-xl shadow-sm overflow-hidden h-[calc(100vh-12rem)]">
-					<PdfViewer url={getDocumentFileUrl(docId)} />
+					<PdfViewer url={getDocumentFileUrl(docId)} mimeType={document.mime_type} />
 				</div>
 			</div>
 

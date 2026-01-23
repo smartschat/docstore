@@ -2,14 +2,19 @@
 	import { onMount } from 'svelte';
 
 	export let url: string;
+	export let mimeType: string | null = null;
 
 	let iframe: HTMLIFrameElement;
 	let loading = true;
 	let error = false;
 
+	$: isImage = mimeType?.startsWith('image/') ?? false;
+
 	// Ensure URL doesn't have download=true for viewing
 	// #navpanes=0 hides the page thumbnails sidebar
-	$: viewUrl = (url.includes('?') ? `${url}&download=false` : `${url}?download=false`) + '#navpanes=0';
+	$: viewUrl = isImage
+		? (url.includes('?') ? `${url}&download=false` : `${url}?download=false`)
+		: (url.includes('?') ? `${url}&download=false` : `${url}?download=false`) + '#navpanes=0';
 	$: downloadUrl = url.includes('?') ? `${url}&download=true` : `${url}?download=true`;
 
 	function handleLoad() {
@@ -41,7 +46,7 @@
 <div class="flex flex-col h-full">
 	<!-- Toolbar -->
 	<div class="flex items-center justify-between p-3 border-b border-slate-200 bg-slate-50">
-		<span class="text-sm text-slate-600">PDF Viewer</span>
+		<span class="text-sm text-slate-600">{isImage ? 'Image Viewer' : 'PDF Viewer'}</span>
 
 		<div class="flex items-center gap-2">
 			<button
@@ -80,7 +85,7 @@
 					<svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 					</svg>
-					<p class="mt-2 text-sm text-slate-500">Failed to load PDF</p>
+					<p class="mt-2 text-sm text-slate-500">Failed to load {isImage ? 'image' : 'PDF'}</p>
 					<button
 						on:click={openInNewTab}
 						class="mt-4 text-sm text-blue-600 hover:text-blue-800"
@@ -89,6 +94,14 @@
 					</button>
 				</div>
 			</div>
+		{:else if isImage}
+			<img
+				src={viewUrl}
+				alt="Document"
+				class="w-full h-full object-contain"
+				on:load={handleLoad}
+				on:error={handleError}
+			/>
 		{:else}
 			<iframe
 				bind:this={iframe}
