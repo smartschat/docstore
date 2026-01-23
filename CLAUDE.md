@@ -70,7 +70,16 @@ cd backend && uv run uvicorn app.main:app --reload
 
 Environment variables in `backend/.env`:
 - `AUTH_PASSWORD` - Single password for web authentication
-- `OPENAI_API_KEY` - Required for extraction, embeddings, and Q&A
+- `OLLAMA_BASE_URL` - Ollama server URL (default: http://localhost:11434)
+- `OLLAMA_MODEL` - Model for extraction/Q&A (default: qwen2.5:3b)
 - `OCR_LANGUAGE` - Tesseract languages (default: deu+eng)
+
+**Ollama Setup** (for LLM features):
+```bash
+# On Mac (serves LLM for extraction and Q&A)
+brew install ollama
+ollama pull qwen2.5:3b
+OLLAMA_HOST=0.0.0.0 ollama serve  # Listen on network
+```
 
 Document categories: utilities, insurance, tax, medical, banking, salary, contract, legal, correspondence, receipt, invoice, other

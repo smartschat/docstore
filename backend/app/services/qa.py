@@ -1,8 +1,8 @@
-"""Question answering service using RAG."""
+"""Question answering service using RAG with Ollama."""
 
 from typing import Optional
+import httpx
 import aiosqlite
-from openai import AsyncOpenAI
 
 from app.config import get_settings
 from app.services.embeddings import semantic_search
@@ -10,16 +10,21 @@ from app.services.embeddings import semantic_search
 settings = get_settings()
 
 
-def get_openai_client() -> AsyncOpenAI:
-    """Get OpenAI client instance."""
-    return AsyncOpenAI(api_key=settings.openai_api_key)
-
-
 QA_SYSTEM_PROMPT = """You are a helpful assistant that answers questions about documents.
 You will be provided with relevant excerpts from documents to help answer the user's question.
 Always base your answers on the provided document context. If the documents don't contain enough information to answer the question, say so.
 When referencing information, mention which document it came from when possible.
 Answer in the same language as the question."""
+
+
+async def check_ollama_available() -> bool:
+    """Check if Ollama server is reachable."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{settings.ollama_base_url}/api/tags")
+            return response.status_code == 200
+    except Exception:
+        return False
 
 
 async def get_document_context(doc_ids: list[str]) -> list[dict]:
@@ -97,6 +102,34 @@ def build_context_prompt(contexts: list[dict], max_chars: int = 12000) -> str:
     return "\n".join(prompt_parts)
 
 
+async def answer_with_ollama(question: str, context_prompt: str) -> str:
+    """Generate answer using Ollama."""
+    prompt = f"""{QA_SYSTEM_PROMPT}
+
+Based on the following documents, please answer this question: {question}
+
+Documents:
+{context_prompt}
+
+Question: {question}"""
+
+    try:
+        async with httpx.AsyncClient(timeout=settings.ollama_timeout) as client:
+            response = await client.post(
+                f"{settings.ollama_base_url}/api/generate",
+                json={
+                    "model": settings.ollama_model,
+                    "prompt": prompt,
+                    "stream": False,
+                },
+            )
+            response.raise_for_status()
+            result = response.json()
+            return result.get("response", "").strip()
+    except Exception as e:
+        return f"Error generating answer: {e}"
+
+
 async def answer_question(
     question: str,
     doc_ids: Optional[list[str]] = None,
@@ -113,9 +146,10 @@ async def answer_question(
     Returns:
         Dict with answer and source document IDs
     """
-    if not settings.openai_api_key:
+    # Check if Ollama is available
+    if not await check_ollama_available():
         return {
-            "answer": "OpenAI API key not configured. Cannot answer questions.",
+            "answer": "LLM service (Ollama) is not available. Please ensure your Mac is running Ollama.",
             "sources": [],
         }
 
@@ -146,29 +180,8 @@ async def answer_question(
     # Build context prompt
     context_prompt = build_context_prompt(contexts)
 
-    # Call OpenAI
-    client = get_openai_client()
-
-    messages = [
-        {"role": "system", "content": QA_SYSTEM_PROMPT},
-        {
-            "role": "user",
-            "content": f"""Based on the following documents, please answer this question: {question}
-
-Documents:
-{context_prompt}
-
-Question: {question}"""
-        }
-    ]
-
-    response = await client.chat.completions.create(
-        model=settings.openai_chat_model,
-        messages=messages,
-        max_completion_tokens=1000,
-    )
-
-    answer = response.choices[0].message.content.strip()
+    # Generate answer with Ollama
+    answer = await answer_with_ollama(question, context_prompt)
 
     return {
         "answer": answer,
