@@ -38,7 +38,7 @@ async def get_document_context(doc_ids: list[str]) -> list[dict]:
         for doc_id in doc_ids:
             cursor = await db.execute(
                 """
-                SELECT id, filename, raw_text, summary, doc_type
+                SELECT id, filename, raw_text, summary, category
                 FROM documents
                 WHERE id = ?
                 """,
@@ -52,7 +52,7 @@ async def get_document_context(doc_ids: list[str]) -> list[dict]:
                     "filename": row[1],
                     "text": row[2] or "",
                     "summary": row[3] or "",
-                    "doc_type": row[4],
+                    "category": row[4],
                 })
 
     return contexts
@@ -87,8 +87,8 @@ def build_context_prompt(contexts: list[dict], max_chars: int = 12000) -> str:
             content = content[:remaining] + "..."
 
         doc_header = f"[Document: {ctx['filename']}]"
-        if ctx["doc_type"]:
-            doc_header += f" (Type: {ctx['doc_type']})"
+        if ctx["category"]:
+            doc_header += f" (Category: {ctx['category']})"
 
         part = f"{doc_header}\n{content}\n"
         prompt_parts.append(part)
