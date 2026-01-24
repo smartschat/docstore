@@ -6,8 +6,13 @@ from typing import Optional
 import aiosqlite
 
 from app.config import get_settings
+from app.models import DocumentStatus
 from app.services.extraction import check_ollama_available, process_document_extraction
-from app.services.watcher import update_document_extraction, update_extraction_status
+from app.services.watcher import (
+    update_document_extraction,
+    update_document_status,
+    update_extraction_status,
+)
 
 settings = get_settings()
 
@@ -77,6 +82,7 @@ async def process_pending_extraction(doc: dict) -> bool:
         extraction_result = await process_document_extraction(doc_id, raw_text)
         await update_document_extraction(doc_id, extraction_result)
         await update_extraction_status(doc_id, "completed")
+        await update_document_status(doc_id, DocumentStatus.COMPLETED)
         print(f"Completed queued extraction for {doc_id}")
         return True
     except Exception as e:

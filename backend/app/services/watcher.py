@@ -222,16 +222,21 @@ async def process_document(file_path: Path) -> Optional[str]:
                 extraction_result = await process_document_extraction(doc_id, ocr_result.text)
                 await update_document_extraction(doc_id, extraction_result)
                 await update_extraction_status(doc_id, "completed")
+                # Fully processed
+                await update_document_status(doc_id, DocumentStatus.COMPLETED)
+                print(f"Successfully processed document: {doc_id}")
             else:
                 print(f"Ollama unavailable - queueing extraction for {doc_id}")
                 await update_extraction_status(doc_id, "pending")
+                # Stay in processing until extraction completes
+                print(f"Document {doc_id} waiting for extraction")
 
             # Embeddings use local model, always run
             await embed_document(doc_id, ocr_result.text)
-
-        # Mark as completed (document is searchable by text/filename)
-        await update_document_status(doc_id, DocumentStatus.COMPLETED)
-        print(f"Successfully processed document: {doc_id}")
+        else:
+            # No text, nothing to extract - mark as completed
+            await update_document_status(doc_id, DocumentStatus.COMPLETED)
+            print(f"Successfully processed document (no text): {doc_id}")
 
         return doc_id
 
