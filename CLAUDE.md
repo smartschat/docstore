@@ -23,6 +23,18 @@ make build
 # Run linters (ruff for Python, svelte-check for frontend)
 make lint
 
+# Run all tests
+make test
+
+# Run unit tests only
+make test-unit
+
+# Run integration tests only
+make test-integration
+
+# Run tests with coverage report
+make test-coverage
+
 # Initialize database manually
 make db-init
 

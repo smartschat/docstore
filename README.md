@@ -1,5 +1,10 @@
 # DocStore
 
+![Python](https://img.shields.io/badge/python-3.11+-blue)
+![Svelte](https://img.shields.io/badge/svelte-5-orange)
+[![Tests](https://github.com/smartschat/docstore/actions/workflows/test.yml/badge.svg)](https://github.com/smartschat/docstore/actions/workflows/test.yml)
+[![Lint](https://github.com/smartschat/docstore/actions/workflows/lint.yml/badge.svg)](https://github.com/smartschat/docstore/actions/workflows/lint.yml)
+
 A self-hosted document management system with OCR, semantic search, and LLM-powered data extraction. Designed to run on a Raspberry Pi with local embeddings and Ollama for LLM features.
 
 ## Features
