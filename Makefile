@@ -1,4 +1,4 @@
-.PHONY: help install dev backend frontend build clean lint docker-build docker-run docker-stop db-init process-inbox add update
+.PHONY: help install dev backend frontend build clean lint test test-unit test-integration test-coverage docker-build docker-run docker-stop db-init process-inbox add update
 
 # Default target
 help:
@@ -11,6 +11,10 @@ help:
 	@echo "  make frontend      Run frontend only"
 	@echo "  make build         Build frontend for production"
 	@echo "  make lint          Run linters (ruff + svelte-check)"
+	@echo "  make test          Run all tests"
+	@echo "  make test-unit     Run unit tests only"
+	@echo "  make test-integration Run integration tests only"
+	@echo "  make test-coverage Run tests with coverage report"
 	@echo "  make clean         Remove build artifacts"
 	@echo "  make docker-build  Build production Docker image"
 	@echo "  make docker-run    Run production container locally"
@@ -56,6 +60,24 @@ lint:
 	@echo "Running Svelte/TypeScript checker..."
 	cd frontend && npm run check
 	@echo "All checks passed!"
+
+# Tests
+test:
+	@echo "Running all tests..."
+	cd backend && uv run pytest
+
+test-unit:
+	@echo "Running unit tests..."
+	cd backend && uv run pytest tests/unit -v
+
+test-integration:
+	@echo "Running integration tests..."
+	cd backend && uv run pytest tests/integration -v
+
+test-coverage:
+	@echo "Running tests with coverage..."
+	cd backend && uv run pytest --cov=app --cov-report=html --cov-report=term
+	@echo "HTML coverage report: backend/htmlcov/index.html"
 
 # Clean
 clean:
