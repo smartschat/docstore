@@ -85,14 +85,10 @@ class TestGetMimeType:
         mime = get_mime_type(pdf_file)
         assert mime == "application/pdf"
 
-    def test_detects_jpeg(self, tmp_path):
+    def test_detects_jpeg(self, tmp_path, sample_image):
         """JPEG files are detected correctly."""
-        jpg_file = tmp_path / "test.jpg"
-        jpg_file.write_bytes(b"\xff\xd8\xff")
-
-        mime = get_mime_type(jpg_file)
-        # Will either use magic library or fallback to extension
-        assert mime in ("image/jpeg", "application/pdf")
+        mime = get_mime_type(sample_image)
+        assert mime == "image/jpeg"
 
     def test_fallback_to_extension(self, tmp_path):
         """Extension mapping works for known extensions."""

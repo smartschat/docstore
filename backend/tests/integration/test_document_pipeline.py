@@ -255,7 +255,7 @@ class TestQueueProcessor:
             "title": "Queue Test Invoice"
         }
 
-        with patch("app.services.extraction.process_document_extraction", new_callable=AsyncMock) as mock_extraction:
+        with patch("app.services.queue.process_document_extraction", new_callable=AsyncMock) as mock_extraction:
 
             mock_extraction.return_value = extraction_response
 
