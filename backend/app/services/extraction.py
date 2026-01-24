@@ -99,8 +99,9 @@ def parse_json_response(content: str) -> dict[str, Any]:
 def strip_thinking(text: str) -> str:
     """Remove <think>...</think> blocks from model output."""
     import re
+
     # Remove think blocks (can be multiline)
-    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
     return text.strip()
 
 
@@ -154,7 +155,7 @@ async def generate_title(summary: str) -> str | None:
         response = await call_ollama(prompt)
 
         # Clean up the response - remove quotes, newlines
-        title = response.strip().strip('"\'').split('\n')[0]
+        title = response.strip().strip("\"'").split("\n")[0]
 
         # Sanity check - title should be reasonable length
         if title and 3 <= len(title) <= 100:

@@ -69,11 +69,13 @@ def _load_model():
 
         # Load tokenizer
         from tokenizers import Tokenizer
+
         _tokenizer = Tokenizer.from_file(str(tokenizer_path))
 
         # Load ONNX model
         import onnxruntime as ort
-        _session = ort.InferenceSession(str(model_path), providers=['CPUExecutionProvider'])
+
+        _session = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
 
         _model_loaded = True
         print("Embedding model loaded (ONNX)")
@@ -118,6 +120,7 @@ async def generate_embedding(text: str) -> list[float]:
     Returns:
         384-dimensional embedding vector (MiniLM)
     """
+
     def _encode():
         if not _load_model():
             return None
@@ -139,10 +142,10 @@ async def generate_embedding(text: str) -> list[float]:
         outputs = _session.run(
             None,
             {
-                'input_ids': input_ids,
-                'attention_mask': attention_mask,
-                'token_type_ids': token_type_ids,
-            }
+                "input_ids": input_ids,
+                "attention_mask": attention_mask,
+                "token_type_ids": token_type_ids,
+            },
         )
 
         # Get sentence embedding via mean pooling
@@ -157,8 +160,10 @@ async def generate_embedding(text: str) -> list[float]:
 def _get_vec_connection():
     """Get a sync connection with sqlite-vec loaded."""
     import sqlite3
+
     try:
         import sqlite_vec
+
         conn = sqlite3.connect(str(settings.database_path))
         conn.enable_load_extension(True)
         sqlite_vec.load(conn)
@@ -176,11 +181,13 @@ async def store_embedding(doc_id: str, embedding: list[float]) -> None:
         doc_id: Document ID
         embedding: Embedding vector
     """
+
     def _store():
         conn = _get_vec_connection()
         if not conn:
             # Fallback: store in regular table as JSON
             import sqlite3
+
             conn = sqlite3.connect(str(settings.database_path))
 
         try:
@@ -188,7 +195,7 @@ async def store_embedding(doc_id: str, embedding: list[float]) -> None:
             conn.execute("DELETE FROM document_embeddings WHERE doc_id = ?", (doc_id,))
             conn.execute(
                 "INSERT INTO document_embeddings (doc_id, embedding) VALUES (?, ?)",
-                (doc_id, embedding_json)
+                (doc_id, embedding_json),
             )
             conn.commit()
         finally:
@@ -213,6 +220,7 @@ async def search_similar(
     Returns:
         List of (doc_id, similarity_score) tuples
     """
+
     def _search():
         conn = _get_vec_connection()
         if not conn:
@@ -231,7 +239,7 @@ async def search_similar(
                     ORDER BY distance ASC
                     LIMIT ?
                     """,
-                    (query_json, category, limit)
+                    (query_json, category, limit),
                 )
             else:
                 cursor = conn.execute(
@@ -241,7 +249,7 @@ async def search_similar(
                     ORDER BY distance ASC
                     LIMIT ?
                     """,
-                    (query_json, limit)
+                    (query_json, limit),
                 )
 
             rows = cursor.fetchall()
@@ -287,12 +295,10 @@ async def _search_similar_fallback(
                 JOIN documents d ON d.id = e.doc_id
                 WHERE d.category = ?
                 """,
-                (category,)
+                (category,),
             )
         else:
-            cursor = await db.execute(
-                "SELECT doc_id, embedding FROM document_embeddings"
-            )
+            cursor = await db.execute("SELECT doc_id, embedding FROM document_embeddings")
 
         results = []
         async for row in cursor:

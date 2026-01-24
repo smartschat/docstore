@@ -33,7 +33,7 @@ async def get_document_tags(doc_id: str) -> list[Tag]:
             JOIN document_tags dt ON dt.tag_id = t.id
             WHERE dt.doc_id = ?
             """,
-            (doc_id,)
+            (doc_id,),
         )
         rows = await cursor.fetchall()
         return [Tag(id=row["id"], name=row["name"]) for row in rows]
@@ -52,7 +52,9 @@ def row_to_document(row: dict, tags: list[Tag] = None) -> Document:
         page_count=row["page_count"],
         summary=row["summary"],
         document_date=row["document_date"],
-        created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else datetime.utcnow(),
+        created_at=datetime.fromisoformat(row["created_at"])
+        if row["created_at"]
+        else datetime.utcnow(),
         processed_at=datetime.fromisoformat(row["processed_at"]) if row["processed_at"] else None,
         status=DocumentStatus(row["status"]) if row["status"] else DocumentStatus.PENDING,
         extraction_status=row.get("extraction_status"),
@@ -127,7 +129,7 @@ async def keyword_search(
             ORDER BY score
             LIMIT ?
             """,
-            params
+            params,
         )
 
         rows = await cursor.fetchall()
@@ -218,8 +220,7 @@ async def hybrid_search(
                     params.append(date_to)
 
                 cursor = await db.execute(
-                    f"SELECT 1 FROM documents WHERE {' AND '.join(where_clauses)}",
-                    params
+                    f"SELECT 1 FROM documents WHERE {' AND '.join(where_clauses)}", params
                 )
                 if await cursor.fetchone():
                     filtered.append((doc_id, score, snippet))
@@ -269,19 +270,18 @@ async def search_documents(
     async with aiosqlite.connect(settings.database_path) as db:
         db.row_factory = aiosqlite.Row
         for doc_id, score, snippet in results:
-            cursor = await db.execute(
-                "SELECT * FROM documents WHERE id = ?",
-                (doc_id,)
-            )
+            cursor = await db.execute("SELECT * FROM documents WHERE id = ?", (doc_id,))
             row = await cursor.fetchone()
             if row:
                 tags = await get_document_tags(doc_id)
                 doc = row_to_document(dict(row), tags)
-                search_results.append(SearchResult(
-                    document=doc,
-                    score=score,
-                    snippet=snippet,
-                ))
+                search_results.append(
+                    SearchResult(
+                        document=doc,
+                        score=score,
+                        snippet=snippet,
+                    )
+                )
 
     return SearchResponse(
         results=search_results,
@@ -304,7 +304,7 @@ async def search_suggestions(
             WHERE filename LIKE ?
             LIMIT 5
             """,
-            (f"%{q}%",)
+            (f"%{q}%",),
         )
         filenames = [row[0] for row in await cursor.fetchall()]
 
@@ -315,7 +315,7 @@ async def search_suggestions(
             WHERE name LIKE ?
             LIMIT 5
             """,
-            (f"%{q}%",)
+            (f"%{q}%",),
         )
         tags = [row[0] for row in await cursor.fetchall()]
 
@@ -326,7 +326,7 @@ async def search_suggestions(
             WHERE counterparty LIKE ?
             LIMIT 5
             """,
-            (f"%{q}%",)
+            (f"%{q}%",),
         )
         counterparties = [row[0] for row in await cursor.fetchall() if row[0]]
 

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 class DocumentStatus(str, Enum):
     """Document processing status."""
+
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
@@ -41,6 +42,7 @@ class DocumentCreate(DocumentBase):
 
 class DocumentUpdate(BaseModel):
     """Fields that can be manually updated."""
+
     title: Optional[str] = None
     counterparty: Optional[str] = None
     affected_person: Optional[str] = None
@@ -79,6 +81,7 @@ class Document(DocumentBase):
 
 class DocumentList(BaseModel):
     """Paginated document list response."""
+
     items: list[Document]
     total: int
     page: int
@@ -142,5 +145,3 @@ class DashboardStats(BaseModel):
     documents_by_category: dict[str, int]
     documents_by_status: dict[str, int]
     recent_documents: list[Document]
-
-

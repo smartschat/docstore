@@ -29,7 +29,7 @@ async def create_session(token: str) -> None:
     async with aiosqlite.connect(settings.database_path) as db:
         await db.execute(
             "INSERT INTO sessions (token, expires_at) VALUES (?, ?)",
-            (token, expires_at.isoformat())
+            (token, expires_at.isoformat()),
         )
         await db.commit()
 
@@ -40,10 +40,7 @@ async def validate_session(token: str) -> bool:
         return False
 
     async with aiosqlite.connect(settings.database_path) as db:
-        cursor = await db.execute(
-            "SELECT expires_at FROM sessions WHERE token = ?",
-            (token,)
-        )
+        cursor = await db.execute("SELECT expires_at FROM sessions WHERE token = ?", (token,))
         row = await cursor.fetchone()
 
         if not row:
@@ -70,15 +67,13 @@ async def cleanup_expired_sessions() -> None:
     """Remove all expired sessions."""
     async with aiosqlite.connect(settings.database_path) as db:
         await db.execute(
-            "DELETE FROM sessions WHERE expires_at < ?",
-            (datetime.utcnow().isoformat(),)
+            "DELETE FROM sessions WHERE expires_at < ?", (datetime.utcnow().isoformat(),)
         )
         await db.commit()
 
 
 async def get_current_session(
-    request: Request,
-    session_token: Optional[str] = Cookie(default=None, alias="session")
+    request: Request, session_token: Optional[str] = Cookie(default=None, alias="session")
 ) -> str:
     """Dependency to get and validate the current session."""
     # Also check Authorization header for API clients
@@ -87,15 +82,11 @@ async def get_current_session(
         session_token = auth_header[7:]
 
     if not session_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
     if not await validate_session(session_token):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired session"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired session"
         )
 
     return session_token

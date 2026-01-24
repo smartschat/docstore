@@ -11,6 +11,7 @@ from app.config import get_settings
 
 class Base(DeclarativeBase):
     """Base class for SQLAlchemy models."""
+
     pass
 
 
@@ -41,6 +42,7 @@ def init_sqlite_vec(conn: sqlite3.Connection) -> None:
     """Load sqlite-vec extension."""
     try:
         import sqlite_vec
+
         conn.enable_load_extension(True)
         sqlite_vec.load(conn)
         conn.enable_load_extension(False)
@@ -182,6 +184,7 @@ async def init_database() -> None:
     vec_table_created = False
     try:
         import sqlite_vec
+
         sync_conn = sqlite3.connect(str(settings.database_path))
         sync_conn.enable_load_extension(True)
         sqlite_vec.load(sync_conn)

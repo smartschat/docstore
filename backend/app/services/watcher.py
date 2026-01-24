@@ -34,6 +34,7 @@ def get_mime_type(file_path: Path) -> str:
     """Detect MIME type of a file."""
     try:
         import magic
+
         return magic.from_file(str(file_path), mime=True)
     except Exception:
         # Fallback based on extension
@@ -52,10 +53,7 @@ def get_mime_type(file_path: Path) -> str:
 async def check_duplicate(file_hash: str) -> Optional[str]:
     """Check if a document with the same hash already exists."""
     async with aiosqlite.connect(settings.database_path) as db:
-        cursor = await db.execute(
-            "SELECT id FROM documents WHERE file_hash = ?",
-            (file_hash,)
-        )
+        cursor = await db.execute("SELECT id FROM documents WHERE file_hash = ?", (file_hash,))
         row = await cursor.fetchone()
         return row[0] if row else None
 
@@ -75,24 +73,31 @@ async def create_document_record(
             INSERT INTO documents (id, filename, file_path, file_hash, file_size, mime_type, status)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (doc_id, filename, file_path, file_hash, file_size, mime_type, DocumentStatus.PENDING.value)
+            (
+                doc_id,
+                filename,
+                file_path,
+                file_hash,
+                file_size,
+                mime_type,
+                DocumentStatus.PENDING.value,
+            ),
         )
         await db.commit()
 
 
-async def update_document_status(doc_id: str, status: DocumentStatus, error: Optional[str] = None) -> None:
+async def update_document_status(
+    doc_id: str, status: DocumentStatus, error: Optional[str] = None
+) -> None:
     """Update document processing status."""
     async with aiosqlite.connect(settings.database_path) as db:
         if status == DocumentStatus.COMPLETED:
             await db.execute(
                 "UPDATE documents SET status = ?, processed_at = ? WHERE id = ?",
-                (status.value, datetime.utcnow().isoformat(), doc_id)
+                (status.value, datetime.utcnow().isoformat(), doc_id),
             )
         else:
-            await db.execute(
-                "UPDATE documents SET status = ? WHERE id = ?",
-                (status.value, doc_id)
-            )
+            await db.execute("UPDATE documents SET status = ? WHERE id = ?", (status.value, doc_id))
         await db.commit()
 
 
@@ -105,7 +110,7 @@ async def update_document_ocr(
     async with aiosqlite.connect(settings.database_path) as db:
         await db.execute(
             "UPDATE documents SET raw_text = ?, page_count = ? WHERE id = ?",
-            (raw_text, page_count, doc_id)
+            (raw_text, page_count, doc_id),
         )
         await db.commit()
 
@@ -134,7 +139,7 @@ async def update_document_extraction(doc_id: str, data: dict) -> None:
                 data.get("document_date"),
                 data.get("summary"),
                 doc_id,
-            )
+            ),
         )
         await db.commit()
 
@@ -143,8 +148,7 @@ async def update_extraction_status(doc_id: str, status: str) -> None:
     """Update document extraction status (pending, completed, or None)."""
     async with aiosqlite.connect(settings.database_path) as db:
         await db.execute(
-            "UPDATE documents SET extraction_status = ? WHERE id = ?",
-            (status, doc_id)
+            "UPDATE documents SET extraction_status = ? WHERE id = ?", (status, doc_id)
         )
         await db.commit()
 

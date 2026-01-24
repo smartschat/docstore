@@ -48,18 +48,20 @@ async def get_document_context(doc_ids: list[str]) -> list[dict]:
                 FROM documents
                 WHERE id = ?
                 """,
-                (doc_id,)
+                (doc_id,),
             )
             row = await cursor.fetchone()
 
             if row:
-                contexts.append({
-                    "id": row[0],
-                    "filename": row[1],
-                    "text": row[2] or "",
-                    "summary": row[3] or "",
-                    "category": row[4],
-                })
+                contexts.append(
+                    {
+                        "id": row[0],
+                        "filename": row[1],
+                        "text": row[2] or "",
+                        "summary": row[3] or "",
+                        "category": row[4],
+                    }
+                )
 
     return contexts
 

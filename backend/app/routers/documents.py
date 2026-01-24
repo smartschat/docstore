@@ -28,10 +28,7 @@ async def get_document_by_id(doc_id: str) -> Optional[dict]:
     """Fetch a document from the database."""
     async with aiosqlite.connect(settings.database_path) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            "SELECT * FROM documents WHERE id = ?",
-            (doc_id,)
-        )
+        cursor = await db.execute("SELECT * FROM documents WHERE id = ?", (doc_id,))
         row = await cursor.fetchone()
         return dict(row) if row else None
 
@@ -47,7 +44,7 @@ async def get_document_tags(doc_id: str) -> list[Tag]:
             JOIN document_tags dt ON dt.tag_id = t.id
             WHERE dt.doc_id = ?
             """,
-            (doc_id,)
+            (doc_id,),
         )
         rows = await cursor.fetchall()
         return [Tag(id=row["id"], name=row["name"]) for row in rows]
@@ -66,7 +63,9 @@ def row_to_document(row: dict, tags: list[Tag] = None) -> Document:
         page_count=row["page_count"],
         summary=row["summary"],
         document_date=row["document_date"],
-        created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else datetime.utcnow(),
+        created_at=datetime.fromisoformat(row["created_at"])
+        if row["created_at"]
+        else datetime.utcnow(),
         processed_at=datetime.fromisoformat(row["processed_at"]) if row["processed_at"] else None,
         status=DocumentStatus(row["status"]) if row["status"] else DocumentStatus.PENDING,
         extraction_status=row.get("extraction_status"),
@@ -124,10 +123,7 @@ async def list_documents(
         where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
         # Get total count
-        cursor = await db.execute(
-            f"SELECT COUNT(*) FROM documents WHERE {where_sql}",
-            params
-        )
+        cursor = await db.execute(f"SELECT COUNT(*) FROM documents WHERE {where_sql}", params)
         total = (await cursor.fetchone())[0]
 
         # Get documents
@@ -138,7 +134,7 @@ async def list_documents(
             ORDER BY created_at DESC
             LIMIT ? OFFSET ?
             """,
-            params + [page_size, offset]
+            params + [page_size, offset],
         )
         rows = await cursor.fetchall()
 
@@ -185,10 +181,7 @@ async def upload_document(
             if ext_mime in settings.supported_mime_types:
                 mime_type = ext_mime
             else:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Unsupported file type: {mime_type}"
-                )
+                raise HTTPException(status_code=400, detail=f"Unsupported file type: {mime_type}")
 
     # Save to inbox for processing
     settings.ensure_directories()
@@ -241,16 +234,13 @@ async def update_document(
 
             for field, value in update_data.items():
                 updates.append(f"{field} = ?")
-                if hasattr(value, 'isoformat'):
+                if hasattr(value, "isoformat"):
                     params.append(value.isoformat())
                 else:
                     params.append(value)
 
             params.append(doc_id)
-            await db.execute(
-                f"UPDATE documents SET {', '.join(updates)} WHERE id = ?",
-                params
-            )
+            await db.execute(f"UPDATE documents SET {', '.join(updates)} WHERE id = ?", params)
             await db.commit()
 
     row = await get_document_by_id(doc_id)
@@ -343,8 +333,15 @@ async def get_thumbnail(
                 output_base = str(thumb_path).removesuffix(".png")
                 subprocess.run(
                     [
-                        "pdftoppm", "-png", "-f", "1", "-singlefile",
-                        "-scale-to", "300", str(file_path), output_base
+                        "pdftoppm",
+                        "-png",
+                        "-f",
+                        "1",
+                        "-singlefile",
+                        "-scale-to",
+                        "300",
+                        str(file_path),
+                        output_base,
                     ],
                     capture_output=True,
                 )
@@ -377,23 +374,17 @@ async def add_tags(
     async with aiosqlite.connect(settings.database_path) as db:
         for tag_name in tags:
             # Create tag if it doesn't exist
-            await db.execute(
-                "INSERT OR IGNORE INTO tags (name) VALUES (?)",
-                (tag_name,)
-            )
+            await db.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag_name,))
 
             # Get tag ID
-            cursor = await db.execute(
-                "SELECT id FROM tags WHERE name = ?",
-                (tag_name,)
-            )
+            cursor = await db.execute("SELECT id FROM tags WHERE name = ?", (tag_name,))
             tag_row = await cursor.fetchone()
             tag_id = tag_row[0]
 
             # Link tag to document
             await db.execute(
                 "INSERT OR IGNORE INTO document_tags (doc_id, tag_id) VALUES (?, ?)",
-                (doc_id, tag_id)
+                (doc_id, tag_id),
             )
 
         await db.commit()
@@ -409,16 +400,12 @@ async def remove_tag(
 ):
     """Remove a tag from a document."""
     async with aiosqlite.connect(settings.database_path) as db:
-        cursor = await db.execute(
-            "SELECT id FROM tags WHERE name = ?",
-            (tag_name,)
-        )
+        cursor = await db.execute("SELECT id FROM tags WHERE name = ?", (tag_name,))
         tag_row = await cursor.fetchone()
 
         if tag_row:
             await db.execute(
-                "DELETE FROM document_tags WHERE doc_id = ? AND tag_id = ?",
-                (doc_id, tag_row[0])
+                "DELETE FROM document_tags WHERE doc_id = ? AND tag_id = ?", (doc_id, tag_row[0])
             )
             await db.commit()
 

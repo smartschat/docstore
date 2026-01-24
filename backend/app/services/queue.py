@@ -32,7 +32,7 @@ async def get_pending_extractions(limit: int = 5) -> list[dict]:
             ORDER BY created_at ASC
             LIMIT ?
             """,
-            (limit,)
+            (limit,),
         )
         rows = await cursor.fetchall()
         return [{"id": row["id"], "raw_text": row["raw_text"]} for row in rows]

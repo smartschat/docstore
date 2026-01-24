@@ -43,11 +43,14 @@ async def recover_stuck_documents() -> int:
 
     async with aiosqlite.connect(settings.database_path) as db:
         # Documents with completed extraction but stuck in processing
-        cursor = await db.execute("""
+        cursor = await db.execute(
+            """
             UPDATE documents
             SET status = 'completed', processed_at = ?
             WHERE status = 'processing' AND extraction_status = 'completed'
-        """, (datetime.utcnow().isoformat(),))
+        """,
+            (datetime.utcnow().isoformat(),),
+        )
         completed_count = cursor.rowcount
         await db.commit()
 
@@ -188,46 +191,53 @@ async def get_stats(_: str = Depends(get_current_session)):
         cursor = await db.execute(
             "SELECT category, COUNT(*) as count FROM documents GROUP BY category"
         )
-        by_category = {row["category"] or "uncategorized": row["count"] for row in await cursor.fetchall()}
+        by_category = {
+            row["category"] or "uncategorized": row["count"] for row in await cursor.fetchall()
+        }
 
         # By status
-        cursor = await db.execute(
-            "SELECT status, COUNT(*) as count FROM documents GROUP BY status"
-        )
+        cursor = await db.execute("SELECT status, COUNT(*) as count FROM documents GROUP BY status")
         by_status = {row["status"] or "unknown": row["count"] for row in await cursor.fetchall()}
 
         # Recent documents
-        cursor = await db.execute(
-            "SELECT * FROM documents ORDER BY created_at DESC LIMIT 5"
-        )
+        cursor = await db.execute("SELECT * FROM documents ORDER BY created_at DESC LIMIT 5")
         recent_rows = await cursor.fetchall()
 
         recent = []
         for row in recent_rows:
             from datetime import datetime
+
             row_dict = dict(row)
-            recent.append(Document(
-                id=row_dict["id"],
-                filename=row_dict["filename"],
-                file_path=row_dict["file_path"],
-                file_hash=row_dict["file_hash"],
-                file_size=row_dict["file_size"],
-                mime_type=row_dict["mime_type"],
-                raw_text=row_dict["raw_text"],
-                page_count=row_dict["page_count"],
-                summary=row_dict["summary"],
-                document_date=row_dict["document_date"],
-                created_at=datetime.fromisoformat(row_dict["created_at"]) if row_dict["created_at"] else datetime.utcnow(),
-                processed_at=datetime.fromisoformat(row_dict["processed_at"]) if row_dict["processed_at"] else None,
-                status=DocumentStatus(row_dict["status"]) if row_dict["status"] else DocumentStatus.PENDING,
-                extraction_status=row_dict.get("extraction_status"),
-                title=row_dict.get("title"),
-                counterparty=row_dict.get("counterparty"),
-                affected_person=row_dict.get("affected_person"),
-                category=row_dict.get("category"),
-                reference=row_dict.get("reference"),
-                tags=[],
-            ))
+            recent.append(
+                Document(
+                    id=row_dict["id"],
+                    filename=row_dict["filename"],
+                    file_path=row_dict["file_path"],
+                    file_hash=row_dict["file_hash"],
+                    file_size=row_dict["file_size"],
+                    mime_type=row_dict["mime_type"],
+                    raw_text=row_dict["raw_text"],
+                    page_count=row_dict["page_count"],
+                    summary=row_dict["summary"],
+                    document_date=row_dict["document_date"],
+                    created_at=datetime.fromisoformat(row_dict["created_at"])
+                    if row_dict["created_at"]
+                    else datetime.utcnow(),
+                    processed_at=datetime.fromisoformat(row_dict["processed_at"])
+                    if row_dict["processed_at"]
+                    else None,
+                    status=DocumentStatus(row_dict["status"])
+                    if row_dict["status"]
+                    else DocumentStatus.PENDING,
+                    extraction_status=row_dict.get("extraction_status"),
+                    title=row_dict.get("title"),
+                    counterparty=row_dict.get("counterparty"),
+                    affected_person=row_dict.get("affected_person"),
+                    category=row_dict.get("category"),
+                    reference=row_dict.get("reference"),
+                    tags=[],
+                )
+            )
 
         return DashboardStats(
             total_documents=total,
@@ -260,10 +270,7 @@ async def reprocess_document(
 
     async with aiosqlite.connect(settings.database_path) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            "SELECT * FROM documents WHERE id = ?",
-            (doc_id,)
-        )
+        cursor = await db.execute("SELECT * FROM documents WHERE id = ?", (doc_id,))
         row = await cursor.fetchone()
 
         if not row:
@@ -331,6 +338,7 @@ if settings.static_dir.exists() and (settings.static_dir / "index.html").exists(
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",

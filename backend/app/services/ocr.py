@@ -49,10 +49,13 @@ async def process_pdf(
         # Build ocrmypdf command
         cmd = [
             "ocrmypdf",
-            "--language", settings.ocr_language,
-            "--jobs", "2",  # Limit CPU usage for Pi
+            "--language",
+            settings.ocr_language,
+            "--jobs",
+            "2",  # Limit CPU usage for Pi
             "--skip-text",  # Don't re-OCR pages that already have text
-            "--output-type", "pdf",
+            "--output-type",
+            "pdf",
         ]
 
         if settings.ocr_deskew:
@@ -96,7 +99,8 @@ async def process_pdf(
         # If sidecar is empty or only contains skip markers, try extracting existing text
         # Skip markers look like: "[OCR skipped on page(s) 1-3]" or "[OCR skipped on page(s) 1]"
         import re
-        text_without_markers = re.sub(r'\[OCR skipped on page\(s\)[^\]]*\]', '', text).strip()
+
+        text_without_markers = re.sub(r"\[OCR skipped on page\(s\)[^\]]*\]", "", text).strip()
         if not text_without_markers:
             text = await extract_text_with_pdftotext(output_path)
 
@@ -207,6 +211,7 @@ async def get_pdf_page_count(pdf_path: Path) -> int:
     # Fallback: try to count using PyPDF or pikepdf
     try:
         import pikepdf
+
         with pikepdf.open(pdf_path) as pdf:
             return len(pdf.pages)
     except Exception:
