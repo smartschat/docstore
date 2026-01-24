@@ -140,6 +140,7 @@ docstore/
 │   │   │   ├── watcher.py    # Folder watcher
 │   │   │   └── qa.py         # Q&A service
 │   │   └── routers/          # API endpoints
+│   ├── tests/                # Unit and integration tests
 │   └── pyproject.toml
 ├── frontend/         # SvelteKit frontend
 │   ├── src/
@@ -193,6 +194,18 @@ make build
 
 # Run linters
 make lint
+
+# Run all tests
+make test
+
+# Run unit tests only
+make test-unit
+
+# Run integration tests only
+make test-integration
+
+# Run tests with coverage report
+make test-coverage
 
 # Clean build artifacts
 make clean
