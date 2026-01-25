@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { listDocuments, uploadDocument, listTags, type Document, type Tag } from '$lib/api';
 	import DocumentCard from '$components/DocumentCard.svelte';
+	import ScannerModal from '$lib/components/scanner/ScannerModal.svelte';
 
 	let documents: Document[] = [];
 	let tags: Tag[] = [];
@@ -19,6 +21,7 @@
 	let filterTag = '';
 
 	let showUploadModal = false;
+	let showScanner = false;
 	let dragOver = false;
 
 	const categories = [
@@ -134,6 +137,21 @@
 		dragOver = false;
 	}
 
+	async function handleScanUpload(event: CustomEvent<File>) {
+		const file = event.detail;
+		uploading = true;
+		uploadError = '';
+
+		try {
+			await uploadDocument(file);
+			await loadData();
+		} catch (error) {
+			uploadError = error instanceof Error ? error.message : 'Upload failed';
+		} finally {
+			uploading = false;
+		}
+	}
+
 	$: totalPages = Math.ceil(total / pageSize);
 	$: hasNextPage = currentPage < totalPages;
 	$: hasPrevPage = currentPage > 1;
@@ -147,15 +165,39 @@
 	<!-- Header -->
 	<div class="flex justify-between items-center">
 		<h1 class="text-2xl font-bold text-slate-900">Documents</h1>
-		<button
-			on:click={() => (showUploadModal = true)}
-			class="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-		>
-			<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-			</svg>
-			Upload
-		</button>
+		<div class="flex gap-2">
+			{#if browser}
+				<button
+					on:click={() => (showScanner = true)}
+					class="inline-flex items-center px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200"
+				>
+					<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+						/>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+						/>
+					</svg>
+					Scan
+				</button>
+			{/if}
+			<button
+				on:click={() => (showUploadModal = true)}
+				class="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+			>
+				<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+				</svg>
+				Upload
+			</button>
+		</div>
 	</div>
 
 	<!-- Filters -->
@@ -355,3 +397,10 @@
 		</div>
 	</div>
 {/if}
+
+<!-- Scanner Modal -->
+<ScannerModal
+	bind:open={showScanner}
+	on:close={() => (showScanner = false)}
+	on:upload={handleScanUpload}
+/>
