@@ -4,6 +4,17 @@
 	import { isAuthenticated } from '$stores/documents';
 	import { logout } from '$lib/api';
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
+
+	// Register service worker for PWA support
+	onMount(() => {
+		if (browser && 'serviceWorker' in navigator) {
+			navigator.serviceWorker.register('/sw.js').catch((error) => {
+				console.warn('Service worker registration failed:', error);
+			});
+		}
+	});
 
 	const navItems = [
 		{ href: '/', label: 'Dashboard', icon: 'home' },
