@@ -35,15 +35,7 @@
 			return;
 		}
 
-		// Check for multiple cameras
-		try {
-			const devices = await getVideoDevices();
-			hasMultipleCameras = devices.length > 1;
-		} catch {
-			// Ignore - will still work with single camera
-		}
-
-		// Start camera
+		// Start camera first (to get permission)
 		await initCamera();
 
 		// Handle visibility changes
@@ -67,6 +59,15 @@
 			if (videoElement && cameraStream) {
 				videoElement.srcObject = cameraStream.stream;
 			}
+
+			// Re-check for multiple cameras after permission granted
+			// (enumerateDevices often returns empty before permission)
+			try {
+				const devices = await getVideoDevices();
+				hasMultipleCameras = devices.length > 1;
+			} catch {
+				// Ignore - will still work with single camera
+			}
 		} catch (error) {
 			console.error('Camera init error:', error);
 
@@ -87,15 +88,34 @@
 		}
 	}
 
-	function handleVisibilityChange() {
-		if (!browser || !cameraStream) return;
+	// Track the last requested facing mode for restart after visibility change
+	let lastRequestedFacingMode: 'user' | 'environment' = 'environment';
+
+	async function handleVisibilityChange() {
+		if (!browser) return;
 
 		if (document.hidden) {
-			// Pause camera when tab is hidden
-			cameraStream.videoTrack.enabled = false;
+			// Fully stop camera when tab is hidden (iOS keeps LED on if only disabled)
+			if (cameraStream) {
+				lastRequestedFacingMode = cameraStream.requestedFacingMode;
+				stopAllTracks(cameraStream.stream);
+				cameraStream = null;
+				if (videoElement) {
+					videoElement.srcObject = null;
+				}
+			}
 		} else {
-			// Resume camera when tab is visible
-			cameraStream.videoTrack.enabled = true;
+			// Restart camera when tab is visible
+			if (!cameraStream && !useFallback && !permissionDenied) {
+				try {
+					cameraStream = await startCamera(lastRequestedFacingMode);
+					if (videoElement && cameraStream) {
+						videoElement.srcObject = cameraStream.stream;
+					}
+				} catch (error) {
+					console.error('Failed to restart camera:', error);
+				}
+			}
 		}
 	}
 

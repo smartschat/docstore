@@ -28,7 +28,7 @@
 
 	const dispatch = createEventDispatcher<{
 		close: void;
-		upload: File;
+		upload: { file: File; onSuccess: () => void; onError: (error: string) => void };
 	}>();
 
 	let cameraView: CameraView;
@@ -50,8 +50,15 @@
 	onDestroy(() => {
 		if (browser) {
 			document.removeEventListener('keydown', handleKeydown);
+			// Clean up scanner state and object URLs on component destroy
+			resetScanner();
 		}
 	});
+
+	// Also reset when modal is closed externally (open prop changes to false)
+	$: if (!open && browser) {
+		resetScanner();
+	}
 
 	// Focus trap
 	$: if (open && modalElement) {
@@ -107,12 +114,20 @@
 
 			const file = pdfBlobToFile(pdfBlob);
 
-			// Clean up pages
-			clearAllPages();
-
-			// Dispatch upload event
-			dispatch('upload', file);
-			handleClose();
+			// Dispatch upload event and wait for result via callbacks
+			dispatch('upload', {
+				file,
+				onSuccess: () => {
+					// Clean up pages and close only on success
+					clearAllPages();
+					handleClose();
+				},
+				onError: (error: string) => {
+					// Show error and allow retry
+					scannerError.set(error || 'Upload failed. Please try again.');
+					goToReview();
+				}
+			});
 		} catch (error) {
 			console.error('PDF generation error:', error);
 			scannerError.set('Failed to generate PDF. Please try again.');

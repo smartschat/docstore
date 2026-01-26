@@ -32,11 +32,11 @@
 			{pageNumber}
 		</div>
 
-		<!-- Delete button -->
+		<!-- Delete button (visible on hover for mouse, always visible on touch) -->
 		<button
 			type="button"
 			on:click={() => dispatch('delete')}
-			class="absolute top-2 right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+			class="absolute top-2 right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white touch-visible opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
 			aria-label="Delete page {pageNumber}"
 		>
 			<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -44,10 +44,10 @@
 			</svg>
 		</button>
 
-		<!-- Drag handle (shown on hover) -->
+		<!-- Drag handle (visible on hover for mouse, always visible on touch) -->
 		<div
 			data-drag-handle
-			class="absolute bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+			class="absolute bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 bg-black/60 rounded-full touch-visible opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
 			style="touch-action: none;"
 			role="button"
 			tabindex="0"
@@ -86,3 +86,12 @@
 		</button>
 	</div>
 </div>
+
+<style>
+	/* Show controls by default on touch devices (no hover capability) */
+	@media (hover: none) {
+		:global(.touch-visible) {
+			opacity: 0.9 !important;
+		}
+	}
+</style>

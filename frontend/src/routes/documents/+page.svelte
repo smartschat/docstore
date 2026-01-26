@@ -137,16 +137,19 @@
 		dragOver = false;
 	}
 
-	async function handleScanUpload(event: CustomEvent<File>) {
-		const file = event.detail;
+	async function handleScanUpload(event: CustomEvent<{ file: File; onSuccess: () => void; onError: (error: string) => void }>) {
+		const { file, onSuccess, onError } = event.detail;
 		uploading = true;
 		uploadError = '';
 
 		try {
 			await uploadDocument(file);
 			await loadData();
+			onSuccess();
 		} catch (error) {
-			uploadError = error instanceof Error ? error.message : 'Upload failed';
+			const errorMessage = error instanceof Error ? error.message : 'Upload failed';
+			uploadError = errorMessage;
+			onError(errorMessage);
 		} finally {
 			uploading = false;
 		}
