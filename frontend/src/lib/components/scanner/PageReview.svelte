@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
+	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import PageThumbnail from './PageThumbnail.svelte';
 	import {
 		pages,
@@ -19,6 +19,14 @@
 	}>();
 
 	let draggedIndex: number | null = null;
+	let dragOverIndex: number | null = null;
+	let gridElement: HTMLElement;
+
+	// Touch drag state
+	let isTouchDragging = false;
+	let touchDragElement: HTMLElement | null = null;
+	let touchStartY = 0;
+	let touchStartX = 0;
 
 	function handleDelete(pageId: string) {
 		removePage(pageId);
@@ -32,20 +40,79 @@
 		movePageDown(pageId);
 	}
 
-	function handleDragStart(index: number) {
+	// HTML5 Drag and Drop (desktop)
+	function handleDragStart(event: DragEvent, index: number) {
+		// Required for Firefox - must set data
+		event.dataTransfer?.setData('text/plain', String(index));
+		event.dataTransfer!.effectAllowed = 'move';
 		draggedIndex = index;
 	}
 
 	function handleDragOver(event: DragEvent, targetIndex: number) {
 		event.preventDefault();
+		event.dataTransfer!.dropEffect = 'move';
+		dragOverIndex = targetIndex;
+	}
+
+	function handleDrop(event: DragEvent, targetIndex: number) {
+		event.preventDefault();
 		if (draggedIndex !== null && draggedIndex !== targetIndex) {
 			reorderPages(draggedIndex, targetIndex);
-			draggedIndex = targetIndex;
 		}
+		draggedIndex = null;
+		dragOverIndex = null;
 	}
 
 	function handleDragEnd() {
 		draggedIndex = null;
+		dragOverIndex = null;
+	}
+
+	// Touch/Pointer-based drag (mobile)
+	function handlePointerDown(event: PointerEvent, index: number) {
+		const target = event.target as HTMLElement;
+		// Only start drag from drag handle
+		if (!target.closest('[data-drag-handle]')) return;
+
+		event.preventDefault();
+		isTouchDragging = true;
+		draggedIndex = index;
+		touchStartX = event.clientX;
+		touchStartY = event.clientY;
+
+		// Capture pointer for tracking outside element
+		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+	}
+
+	function handlePointerMove(event: PointerEvent) {
+		if (!isTouchDragging || draggedIndex === null) return;
+
+		event.preventDefault();
+
+		// Find element under touch point
+		const elementsAtPoint = document.elementsFromPoint(event.clientX, event.clientY);
+		const targetItem = elementsAtPoint.find((el) => el.hasAttribute('data-page-index'));
+
+		if (targetItem) {
+			const targetIndex = parseInt(targetItem.getAttribute('data-page-index')!, 10);
+			if (targetIndex !== draggedIndex) {
+				reorderPages(draggedIndex, targetIndex);
+				draggedIndex = targetIndex;
+			}
+		}
+	}
+
+	function handlePointerUp() {
+		if (!isTouchDragging) return;
+
+		isTouchDragging = false;
+		draggedIndex = null;
+		dragOverIndex = null;
+		// Pointer capture is released automatically on pointerup
+	}
+
+	function handlePointerCancel() {
+		handlePointerUp();
 	}
 </script>
 
@@ -79,23 +146,32 @@
 			</div>
 		{:else}
 			<div
+				bind:this={gridElement}
 				class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4"
 				role="list"
 				aria-label="Scanned pages"
+				on:pointermove={handlePointerMove}
+				on:pointerup={handlePointerUp}
+				on:pointercancel={handlePointerCancel}
 			>
 				{#each $pages as page, index (page.id)}
 					<div
 						role="listitem"
+						data-page-index={index}
 						draggable="true"
-						on:dragstart={() => handleDragStart(index)}
+						on:dragstart={(e) => handleDragStart(e, index)}
 						on:dragover={(e) => handleDragOver(e, index)}
+						on:drop={(e) => handleDrop(e, index)}
 						on:dragend={handleDragEnd}
+						on:pointerdown={(e) => handlePointerDown(e, index)}
+						class={dragOverIndex === index && draggedIndex !== index ? 'ring-2 ring-primary-400 ring-offset-2 rounded-lg' : ''}
 					>
 						<PageThumbnail
 							imageUrl={page.objectUrl}
 							pageNumber={index + 1}
 							isFirst={index === 0}
 							isLast={index === $pages.length - 1}
+							isDragging={draggedIndex === index}
 							on:delete={() => handleDelete(page.id)}
 							on:moveUp={() => handleMoveUp(page.id)}
 							on:moveDown={() => handleMoveDown(page.id)}

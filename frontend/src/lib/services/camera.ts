@@ -7,6 +7,7 @@ export interface CameraStream {
   stream: MediaStream;
   videoTrack: MediaStreamTrack;
   facingMode: 'user' | 'environment' | 'unknown';
+  requestedFacingMode: 'user' | 'environment';
 }
 
 export interface CaptureOptions {
@@ -63,7 +64,7 @@ export async function startCamera(preferredFacingMode: 'user' | 'environment' = 
     const settings = videoTrack.getSettings();
     const facingMode = (settings.facingMode as 'user' | 'environment') || 'unknown';
 
-    return { stream, videoTrack, facingMode };
+    return { stream, videoTrack, facingMode, requestedFacingMode: preferredFacingMode };
   } catch (error) {
     // If preferred mode fails, try any camera
     console.warn(`Failed to get ${preferredFacingMode} camera, trying any camera:`, error);
@@ -77,15 +78,16 @@ export async function startCamera(preferredFacingMode: 'user' | 'environment' = 
     });
 
     const videoTrack = stream.getVideoTracks()[0];
-    return { stream, videoTrack, facingMode: 'unknown' };
+    return { stream, videoTrack, facingMode: 'unknown', requestedFacingMode: preferredFacingMode };
   }
 }
 
 /**
  * Switch to the other camera (front/back)
+ * Uses requestedFacingMode to reliably toggle even when browser doesn't report facingMode
  */
-export async function switchCamera(currentFacingMode: 'user' | 'environment' | 'unknown'): Promise<CameraStream> {
-  const newFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+export async function switchCamera(currentRequestedFacingMode: 'user' | 'environment'): Promise<CameraStream> {
+  const newFacingMode = currentRequestedFacingMode === 'user' ? 'environment' : 'user';
   return startCamera(newFacingMode);
 }
 
@@ -98,6 +100,40 @@ export function stopAllTracks(stream: MediaStream | null): void {
   stream.getTracks().forEach((track) => {
     track.stop();
   });
+}
+
+/**
+ * Get the current device orientation angle
+ * Returns rotation needed to correct the image (0, 90, 180, 270)
+ */
+function getOrientationCorrection(videoWidth: number, videoHeight: number): number {
+  // Detect device orientation
+  let deviceOrientation = 0;
+
+  if (typeof screen !== 'undefined' && screen.orientation) {
+    // Modern API
+    const type = screen.orientation.type;
+    if (type.includes('landscape')) {
+      deviceOrientation = type.includes('secondary') ? 270 : 90;
+    } else {
+      deviceOrientation = type.includes('secondary') ? 180 : 0;
+    }
+  } else if (typeof window !== 'undefined' && 'orientation' in window) {
+    // Legacy API (iOS Safari)
+    deviceOrientation = Math.abs(window.orientation as number);
+  }
+
+  // On mobile in portrait mode (0 or 180), if video is wider than tall,
+  // the camera feed likely needs rotation
+  const isVideoLandscape = videoWidth > videoHeight;
+  const isDevicePortrait = deviceOrientation === 0 || deviceOrientation === 180;
+
+  if (isDevicePortrait && isVideoLandscape) {
+    // Video needs 90 degree clockwise rotation to match portrait device
+    return 90;
+  }
+
+  return 0;
 }
 
 /**
@@ -118,9 +154,21 @@ export async function captureImage(
     throw new Error('Video not ready for capture');
   }
 
+  // Check if rotation is needed
+  const rotation = getOrientationCorrection(videoWidth, videoHeight);
+  const needsRotation = rotation === 90 || rotation === 270;
+
+  // For 90/270 rotation, swap width and height
+  let sourceWidth = videoWidth;
+  let sourceHeight = videoHeight;
+  if (needsRotation) {
+    sourceWidth = videoHeight;
+    sourceHeight = videoWidth;
+  }
+
   // Calculate scaled dimensions while maintaining aspect ratio
-  let targetWidth = videoWidth;
-  let targetHeight = videoHeight;
+  let targetWidth = sourceWidth;
+  let targetHeight = sourceHeight;
 
   if (opts.maxWidth && targetWidth > opts.maxWidth) {
     const scale = opts.maxWidth / targetWidth;
@@ -134,7 +182,7 @@ export async function captureImage(
     targetWidth = Math.round(targetWidth * scale);
   }
 
-  // Create canvas and draw video frame
+  // Create canvas with correct dimensions for the output
   const canvas = document.createElement('canvas');
   canvas.width = targetWidth;
   canvas.height = targetHeight;
@@ -144,8 +192,17 @@ export async function captureImage(
     throw new Error('Failed to get canvas context');
   }
 
-  // Draw with proper scaling
-  ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+  // Apply rotation if needed
+  if (needsRotation) {
+    ctx.translate(targetWidth / 2, targetHeight / 2);
+    ctx.rotate((rotation * Math.PI) / 180);
+    // After rotation, we need to draw at offset that accounts for the swap
+    const drawWidth = rotation === 90 ? targetHeight : -targetHeight;
+    const drawHeight = rotation === 90 ? targetWidth : -targetWidth;
+    ctx.drawImage(video, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+  } else {
+    ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+  }
 
   // Convert to blob
   return new Promise((resolve, reject) => {

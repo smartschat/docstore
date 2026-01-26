@@ -10,19 +10,9 @@
 		delete: void;
 		moveUp: void;
 		moveDown: void;
-		dragStart: { pageNumber: number };
 	}>();
 
-	let isDragging = false;
-
-	function handlePointerDown(event: PointerEvent) {
-		// Only handle on the drag handle
-		const target = event.target as HTMLElement;
-		if (!target.closest('[data-drag-handle]')) return;
-
-		isDragging = true;
-		dispatch('dragStart', { pageNumber });
-	}
+	export let isDragging = false;
 </script>
 
 <div
@@ -59,7 +49,6 @@
 			data-drag-handle
 			class="absolute bottom-2 left-1/2 -translate-x-1/2 px-3 py-1 bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
 			style="touch-action: none;"
-			on:pointerdown={handlePointerDown}
 			role="button"
 			tabindex="0"
 			aria-label="Drag to reorder"

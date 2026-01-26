@@ -100,6 +100,7 @@ describe('PDF Generator', () => {
 
     it('should include correct date format', () => {
       // Mock Date to control output
+      vi.useFakeTimers();
       const mockDate = new Date('2024-03-15T14:30:45.000Z');
       vi.setSystemTime(mockDate);
 

@@ -121,7 +121,7 @@
 		stopAllTracks(cameraStream.stream);
 
 		try {
-			cameraStream = await switchCamera(cameraStream.facingMode);
+			cameraStream = await switchCamera(cameraStream.requestedFacingMode);
 
 			if (videoElement && cameraStream) {
 				videoElement.srcObject = cameraStream.stream;
