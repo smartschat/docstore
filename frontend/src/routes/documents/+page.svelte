@@ -58,6 +58,9 @@
 		if (urlParams.get('upload') === 'true') {
 			showUploadModal = true;
 		}
+		if (urlParams.get('scan') === 'true') {
+			showScanner = true;
+		}
 
 		await loadData();
 	});
