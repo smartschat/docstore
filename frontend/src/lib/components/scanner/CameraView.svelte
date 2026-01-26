@@ -112,8 +112,12 @@
 					if (videoElement && cameraStream) {
 						videoElement.srcObject = cameraStream.stream;
 					}
+					// Clear any previous error on successful restart
+					cameraError = null;
 				} catch (error) {
 					console.error('Failed to restart camera:', error);
+					// Show error UI so user can tap "Try Again"
+					cameraError = 'Camera disconnected. Tap to reconnect.';
 				}
 			}
 		}

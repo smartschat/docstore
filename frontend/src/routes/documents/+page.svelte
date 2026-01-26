@@ -144,8 +144,15 @@
 
 		try {
 			await uploadDocument(file);
-			await loadData();
+			// Upload succeeded - call onSuccess before refresh
+			// so scanner closes even if list refresh fails
 			onSuccess();
+			// Refresh list separately (failure here shouldn't trigger retry)
+			try {
+				await loadData();
+			} catch (refreshError) {
+				console.error('Failed to refresh document list:', refreshError);
+			}
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : 'Upload failed';
 			uploadError = errorMessage;

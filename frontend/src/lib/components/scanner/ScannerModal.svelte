@@ -118,11 +118,15 @@
 			dispatch('upload', {
 				file,
 				onSuccess: () => {
+					// Guard against modal already closed
+					if (!open) return;
 					// Clean up pages and close only on success
 					clearAllPages();
 					handleClose();
 				},
 				onError: (error: string) => {
+					// Guard against modal already closed
+					if (!open) return;
 					// Show error and allow retry
 					scannerError.set(error || 'Upload failed. Please try again.');
 					goToReview();
