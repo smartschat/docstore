@@ -55,15 +55,21 @@
 		filterStatus = urlParams.get('status') || '';
 		filterTag = urlParams.get('tag') || '';
 
-		if (urlParams.get('upload') === 'true') {
-			showUploadModal = true;
-		}
-		if (urlParams.get('scan') === 'true') {
-			showScanner = true;
-		}
-
 		await loadData();
 	});
+
+	// React to URL params for opening modals (works on navigation too)
+	$: if (browser && $page.url.searchParams.get('upload') === 'true') {
+		showUploadModal = true;
+		// Clear the param so it doesn't persist
+		goto('/documents', { replaceState: true, keepFocus: true });
+	}
+
+	$: if (browser && $page.url.searchParams.get('scan') === 'true') {
+		showScanner = true;
+		// Clear the param so it doesn't persist
+		goto('/documents', { replaceState: true, keepFocus: true });
+	}
 
 	async function loadData() {
 		loading = true;
