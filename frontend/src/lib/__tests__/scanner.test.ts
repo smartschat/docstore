@@ -7,6 +7,7 @@ import {
   pageCount,
   isAtPageLimit,
   canAddMorePages,
+  scannerError,
   MAX_PAGES,
   addPage,
   removePage,
@@ -302,6 +303,45 @@ describe('Scanner Store', () => {
       expect(get(pages)).toHaveLength(MAX_PAGES);
     });
 
+    it('should set error when page limit is reached', () => {
+      // Fill up to limit
+      for (let i = 0; i < MAX_PAGES; i++) {
+        addPage(createMockBlob(`page${i}`));
+      }
+
+      // Clear any previous error
+      scannerError.set(null);
+
+      // Try to add beyond limit
+      const result = addPage(createMockBlob('overflow'));
+
+      // Should return null and set an error message
+      expect(result).toBeNull();
+      expect(get(scannerError)).toContain(`${MAX_PAGES}`);
+    });
+
+    it('should not advance state when capture returns null at page limit', () => {
+      // This test documents the expected behavior that callers (ScannerModal)
+      // must check addPage return value before advancing to preview state
+      for (let i = 0; i < MAX_PAGES; i++) {
+        addPage(createMockBlob(`page${i}`));
+      }
+
+      openScanner();
+      expect(get(scannerState)).toBe('camera');
+
+      // Simulate what handleCapture should do: check return value
+      const result = addPage(createMockBlob('overflow'));
+
+      // Caller should NOT advance to preview when result is null
+      if (result) {
+        goToPreview();
+      }
+
+      // State should still be camera since we didn't advance
+      expect(get(scannerState)).toBe('camera');
+    });
+
     it('should allow adding after removing when at limit', () => {
       for (let i = 0; i < MAX_PAGES; i++) {
         addPage(createMockBlob(`page${i}`));
@@ -316,6 +356,45 @@ describe('Scanner Store', () => {
       const result = addPage(createMockBlob('new page'));
       expect(result).not.toBeNull();
       expect(get(pages)).toHaveLength(MAX_PAGES);
+    });
+  });
+
+  describe('Scanner Reset and Cancellation', () => {
+    it('should clear error on reset', () => {
+      scannerError.set('Test error');
+      expect(get(scannerError)).toBe('Test error');
+
+      resetScanner();
+
+      expect(get(scannerError)).toBeNull();
+    });
+
+    it('should clear all state on reset', () => {
+      // Set up some state
+      openScanner();
+      addPage(createMockBlob('page1'));
+      addPage(createMockBlob('page2'));
+      setGenerating();
+      scannerError.set('Some error');
+
+      // Reset
+      resetScanner();
+
+      // All state should be cleared
+      expect(get(scannerState)).toBe('idle');
+      expect(get(pages)).toHaveLength(0);
+      expect(get(currentPreviewPage)).toBeNull();
+      expect(get(scannerError)).toBeNull();
+    });
+
+    it('should clear error when scanner is opened', () => {
+      // This documents expected behavior: callers should clear errors
+      scannerError.set('Previous error');
+
+      // openScanner clears errors
+      openScanner();
+
+      expect(get(scannerError)).toBeNull();
     });
   });
 

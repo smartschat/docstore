@@ -33,6 +33,10 @@
 
 	let cameraView: CameraView;
 	let modalElement: HTMLDivElement;
+	let isCancelled = false;
+	let abortController: AbortController | null = null;
+	// Session ID increments on each modal open to detect stale operations
+	let sessionId = 0;
 
 	// Handle escape key
 	function handleKeydown(event: KeyboardEvent) {
@@ -49,14 +53,25 @@
 
 	onDestroy(() => {
 		if (browser) {
+			// Cancel any in-progress operations
+			isCancelled = true;
+			abortController?.abort();
 			document.removeEventListener('keydown', handleKeydown);
 			// Clean up scanner state and object URLs on component destroy
 			resetScanner();
 		}
 	});
 
-	// Also reset when modal is closed externally (open prop changes to false)
-	$: if (!open && browser) {
+	// Reset cancellation flag when modal opens, and cleanup when closed
+	$: if (open) {
+		isCancelled = false;
+		abortController = null;
+		// Increment session ID so any in-flight operations from previous sessions are invalidated
+		sessionId++;
+	} else if (browser) {
+		// Cancel any in-progress operations when closed externally
+		isCancelled = true;
+		abortController?.abort();
 		resetScanner();
 	}
 
@@ -66,6 +81,9 @@
 	}
 
 	function handleClose() {
+		// Mark as cancelled to stop any in-progress operations
+		isCancelled = true;
+		abortController?.abort();
 		// Stop camera
 		cameraView?.stopCamera();
 		// Clean up state
@@ -75,8 +93,11 @@
 
 	function handleCapture(event: CustomEvent<Blob>) {
 		const blob = event.detail;
-		addPage(blob);
-		goToPreview();
+		const page = addPage(blob);
+		// Only advance to preview if page was added (null means at limit)
+		if (page) {
+			goToPreview();
+		}
 	}
 
 	function handleCameraError(event: CustomEvent<string>) {
@@ -98,44 +119,69 @@
 	}
 
 	async function handleSave() {
-		if ($pageCount === 0) return;
+		if ($pageCount === 0 || isCancelled) return;
 
 		setGenerating();
+
+		// Capture session ID to detect if modal was closed and reopened
+		const currentSessionId = sessionId;
+
+		// Helper to check if this operation is still valid
+		const isStale = () => isCancelled || sessionId !== currentSessionId;
+
+		// Create abort controller for this generation
+		abortController = new AbortController();
 
 		try {
 			const blobs = getPageBlobs();
 			const pdfBlob = await generatePdf(blobs, {
 				onProgress: (current, total) => {
-					generationProgress.set({ current, total });
-				}
+					// Don't update progress if cancelled or stale
+					if (!isStale()) {
+						generationProgress.set({ current, total });
+					}
+				},
+				signal: abortController.signal
 			});
+
+			// Check if cancelled or session changed during PDF generation
+			if (isStale()) return;
 
 			setUploading();
 
 			const file = pdfBlobToFile(pdfBlob);
 
+			// Check if cancelled or session changed before upload
+			if (isStale()) return;
+
 			// Dispatch upload event and wait for result via callbacks
 			dispatch('upload', {
 				file,
 				onSuccess: () => {
-					// Guard against modal already closed
-					if (!open) return;
+					// Guard against modal closed, cancelled, or different session
+					if (!open || isStale()) return;
 					// Clean up pages and close only on success
 					clearAllPages();
 					handleClose();
 				},
 				onError: (error: string) => {
-					// Guard against modal already closed
-					if (!open) return;
+					// Guard against modal closed, cancelled, or different session
+					if (!open || isStale()) return;
 					// Show error and allow retry
 					scannerError.set(error || 'Upload failed. Please try again.');
 					goToReview();
 				}
 			});
 		} catch (error) {
+			// Don't show error if cancelled, aborted, or stale
+			if (isStale() || (error instanceof DOMException && error.name === 'AbortError')) {
+				return;
+			}
 			console.error('PDF generation error:', error);
 			scannerError.set('Failed to generate PDF. Please try again.');
 			goToReview();
+		} finally {
+			abortController = null;
 		}
 	}
 </script>
@@ -185,7 +231,7 @@
 			</div>
 
 			<!-- Content -->
-			<div class="flex-1 overflow-hidden">
+			<div class="flex-1 overflow-hidden relative">
 				{#if $scannerState === 'camera' || $scannerState === 'idle'}
 					<CameraView
 						bind:this={cameraView}

@@ -25,6 +25,7 @@
 	let permissionDenied = false;
 	let cameraError: string | null = null;
 	let useFallback = false;
+	let isDestroyed = false;
 
 	onMount(async () => {
 		if (!browser) return;
@@ -43,6 +44,7 @@
 	});
 
 	onDestroy(() => {
+		isDestroyed = true;
 		if (browser) {
 			stopAllTracks(cameraStream?.stream ?? null);
 			document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -54,7 +56,15 @@
 			cameraError = null;
 			permissionDenied = false;
 
-			cameraStream = await startCamera('environment');
+			const stream = await startCamera('environment');
+
+			// Check if component was destroyed while waiting for camera
+			if (isDestroyed) {
+				stopAllTracks(stream?.stream ?? null);
+				return;
+			}
+
+			cameraStream = stream;
 
 			if (videoElement && cameraStream) {
 				videoElement.srcObject = cameraStream.stream;
@@ -92,7 +102,7 @@
 	let lastRequestedFacingMode: 'user' | 'environment' = 'environment';
 
 	async function handleVisibilityChange() {
-		if (!browser) return;
+		if (!browser || isDestroyed) return;
 
 		if (document.hidden) {
 			// Fully stop camera when tab is hidden (iOS keeps LED on if only disabled)
@@ -108,7 +118,13 @@
 			// Restart camera when tab is visible
 			if (!cameraStream && !useFallback && !permissionDenied) {
 				try {
-					cameraStream = await startCamera(lastRequestedFacingMode);
+					const stream = await startCamera(lastRequestedFacingMode);
+					// Check if component was destroyed while waiting
+					if (isDestroyed) {
+						stopAllTracks(stream?.stream ?? null);
+						return;
+					}
+					cameraStream = stream;
 					if (videoElement && cameraStream) {
 						videoElement.srcObject = cameraStream.stream;
 					}

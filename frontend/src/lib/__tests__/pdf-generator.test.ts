@@ -89,6 +89,51 @@ describe('PDF Generator', () => {
       expect(pdf).toBeInstanceOf(Blob);
       expect(pdf.type).toBe('application/pdf');
     });
+
+    it('should abort when signal is already aborted', async () => {
+      const blobs = [createJpegBlob(), createJpegBlob()];
+      const controller = new AbortController();
+      controller.abort();
+
+      await expect(
+        generatePdf(blobs, { signal: controller.signal })
+      ).rejects.toThrow('PDF generation aborted');
+    });
+
+    it('should throw DOMException with AbortError name when aborted', async () => {
+      const blobs = [createJpegBlob()];
+      const controller = new AbortController();
+      controller.abort();
+
+      try {
+        await generatePdf(blobs, { signal: controller.signal });
+        expect.fail('Should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(DOMException);
+        expect((error as DOMException).name).toBe('AbortError');
+      }
+    });
+
+    it('should not call progress after abort', async () => {
+      const blobs = [createJpegBlob(), createJpegBlob(), createJpegBlob()];
+      const controller = new AbortController();
+      const progressCalls: number[] = [];
+
+      // Abort after first progress call
+      const promise = generatePdf(blobs, {
+        onProgress: (current) => {
+          progressCalls.push(current);
+          if (current === 1) {
+            controller.abort();
+          }
+        },
+        signal: controller.signal
+      });
+
+      await expect(promise).rejects.toThrow('PDF generation aborted');
+      // Should have called progress for first page only
+      expect(progressCalls).toEqual([1]);
+    });
   });
 
   describe('generateFilename', () => {

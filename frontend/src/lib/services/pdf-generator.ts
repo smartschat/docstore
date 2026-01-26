@@ -9,6 +9,7 @@ const A4_HEIGHT = 842;
 
 export interface PdfGeneratorOptions {
   onProgress?: (current: number, total: number) => void;
+  signal?: AbortSignal;
 }
 
 /**
@@ -29,6 +30,11 @@ export async function generatePdf(
   const pdfDoc = await PDFDocument.create();
 
   for (let i = 0; i < images.length; i++) {
+    // Check for cancellation before processing each page
+    if (options.signal?.aborted) {
+      throw new DOMException('PDF generation aborted', 'AbortError');
+    }
+
     // Report progress
     options.onProgress?.(i + 1, images.length);
 
@@ -84,6 +90,11 @@ export async function generatePdf(
         setTimeout(resolve, 0);
       }
     });
+  }
+
+  // Check for cancellation before saving
+  if (options.signal?.aborted) {
+    throw new DOMException('PDF generation aborted', 'AbortError');
   }
 
   // Save PDF and return as blob
