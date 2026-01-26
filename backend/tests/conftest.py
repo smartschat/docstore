@@ -58,6 +58,7 @@ def test_settings(tmp_path, monkeypatch):
     import app.routers.search
     import app.routers.documents
     import app.routers.qa
+    import app.services.entities
 
     monkeypatch.setattr(app.main, "settings", settings)
     monkeypatch.setattr(app.database, "settings", settings)
@@ -68,6 +69,7 @@ def test_settings(tmp_path, monkeypatch):
     monkeypatch.setattr(app.services.qa, "settings", settings)
     monkeypatch.setattr(app.services.ocr, "settings", settings)
     monkeypatch.setattr(app.services.extraction, "settings", settings)
+    monkeypatch.setattr(app.services.entities, "settings", settings)
     monkeypatch.setattr(app.routers.search, "settings", settings)
     monkeypatch.setattr(app.routers.documents, "settings", settings)
     monkeypatch.setattr(app.routers.qa, "settings", settings)

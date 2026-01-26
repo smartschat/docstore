@@ -74,6 +74,8 @@ async def get_queue_stats() -> dict:
 
 async def process_pending_extraction(doc: dict) -> bool:
     """Process a single pending extraction."""
+    from app.services.entities import disambiguate_document
+
     doc_id = doc["id"]
     raw_text = doc["raw_text"]
 
@@ -82,6 +84,10 @@ async def process_pending_extraction(doc: dict) -> bool:
         extraction_result = await process_document_extraction(doc_id, raw_text)
         await update_document_extraction(doc_id, extraction_result)
         await update_extraction_status(doc_id, "completed")
+
+        # Run entity disambiguation
+        await disambiguate_document(doc_id)
+
         await update_document_status(doc_id, DocumentStatus.COMPLETED)
         print(f"Completed queued extraction for {doc_id}")
         return True

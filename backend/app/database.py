@@ -178,6 +178,90 @@ async def init_database() -> None:
             )
         """)
 
+        # Counterparties (organizations)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS counterparties (
+                id TEXT PRIMARY KEY,
+                canonical_name TEXT NOT NULL,
+                short_name TEXT,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS counterparty_aliases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                counterparty_id TEXT NOT NULL REFERENCES counterparties(id) ON DELETE CASCADE,
+                alias TEXT NOT NULL UNIQUE,
+                source TEXT DEFAULT 'manual',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_counterparty_aliases_alias
+            ON counterparty_aliases(alias COLLATE NOCASE)
+        """)
+
+        # Persons
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS persons (
+                id TEXT PRIMARY KEY,
+                canonical_name TEXT NOT NULL,
+                first_name TEXT,
+                last_name TEXT,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS person_aliases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                person_id TEXT NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
+                alias TEXT NOT NULL UNIQUE,
+                source TEXT DEFAULT 'manual',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_person_aliases_alias
+            ON person_aliases(alias COLLATE NOCASE)
+        """)
+
+        # Document-Person junction table (many-to-many)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS document_persons (
+                document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+                person_id TEXT NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
+                role TEXT DEFAULT 'affected',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (document_id, person_id)
+            )
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_document_persons_person
+            ON document_persons(person_id)
+        """)
+
+        # Migration: Add entity columns to documents if they don't exist
+        cursor = await db.execute("PRAGMA table_info(documents)")
+        columns = [row[1] for row in await cursor.fetchall()]
+
+        if "counterparty_id" not in columns:
+            await db.execute("ALTER TABLE documents ADD COLUMN counterparty_id TEXT REFERENCES counterparties(id)")
+
+        if "counterparty_disambiguation" not in columns:
+            await db.execute("ALTER TABLE documents ADD COLUMN counterparty_disambiguation TEXT DEFAULT 'pending'")
+
+        if "persons_disambiguation" not in columns:
+            await db.execute("ALTER TABLE documents ADD COLUMN persons_disambiguation TEXT DEFAULT 'pending'")
+
         await db.commit()
 
     # Create vector table - try sqlite-vec first, fall back to regular table

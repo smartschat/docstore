@@ -65,8 +65,21 @@
 			<div class="flex items-start justify-between gap-2">
 				<div class="min-w-0">
 					<h3 class="text-sm font-medium text-slate-900 truncate">{document.title || document.filename}</h3>
-					{#if document.counterparty}
-						<p class="text-xs text-slate-500">{document.counterparty}</p>
+					{#if document.counterparty_name || document.counterparty}
+						<p class="text-xs text-slate-500">
+							{#if document.counterparty_name}
+								<span class="text-primary-600">{document.counterparty_name}</span>
+							{:else}
+								{document.counterparty}
+							{/if}
+						</p>
+					{/if}
+					{#if document.linked_persons && document.linked_persons.length > 0}
+						<p class="text-xs text-slate-400">
+							{document.linked_persons.map(p => p.canonical_name).join(', ')}
+						</p>
+					{:else if document.affected_person}
+						<p class="text-xs text-slate-400">{document.affected_person}</p>
 					{/if}
 					{#if document.summary}
 						<p class="mt-1 text-sm text-slate-500 line-clamp-2">{document.summary}</p>

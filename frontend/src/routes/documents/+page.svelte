@@ -3,12 +3,24 @@
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { listDocuments, uploadDocument, listTags, type Document, type Tag } from '$lib/api';
+	import {
+		listDocuments,
+		uploadDocument,
+		listTags,
+		listCounterparties,
+		listPersons,
+		type Document,
+		type Tag,
+		type Counterparty,
+		type Person
+	} from '$lib/api';
 	import DocumentCard from '$components/DocumentCard.svelte';
 	import ScannerModal from '$lib/components/scanner/ScannerModal.svelte';
 
 	let documents: Document[] = [];
 	let tags: Tag[] = [];
+	let counterparties: Counterparty[] = [];
+	let persons: Person[] = [];
 	let total = 0;
 	let currentPage = 1;
 	let pageSize = 20;
@@ -19,6 +31,8 @@
 	let filterCategory = '';
 	let filterStatus = '';
 	let filterTag = '';
+	let filterCounterparty = '';
+	let filterPerson = '';
 
 	let showUploadModal = false;
 	let showScanner = false;
@@ -54,6 +68,8 @@
 		filterCategory = urlParams.get('category') || '';
 		filterStatus = urlParams.get('status') || '';
 		filterTag = urlParams.get('tag') || '';
+		filterCounterparty = urlParams.get('counterparty') || '';
+		filterPerson = urlParams.get('person') || '';
 
 		await loadData();
 	});
@@ -74,20 +90,26 @@
 	async function loadData() {
 		loading = true;
 		try {
-			const [docsResponse, tagsResponse] = await Promise.all([
+			const [docsResponse, tagsResponse, cpResponse, personResponse] = await Promise.all([
 				listDocuments({
 					page: currentPage,
 					page_size: pageSize,
 					category: filterCategory || undefined,
 					status: filterStatus || undefined,
-					tag: filterTag || undefined
+					tag: filterTag || undefined,
+					counterparty_id: filterCounterparty || undefined,
+					person_id: filterPerson || undefined
 				}),
-				listTags()
+				listTags(),
+				listCounterparties(),
+				listPersons()
 			]);
 
 			documents = docsResponse.items;
 			total = docsResponse.total;
 			tags = tagsResponse;
+			counterparties = cpResponse.items;
+			persons = personResponse.items;
 		} catch (error) {
 			console.error('Failed to load documents:', error);
 		} finally {
@@ -106,6 +128,8 @@
 		if (filterCategory) params.set('category', filterCategory);
 		if (filterStatus) params.set('status', filterStatus);
 		if (filterTag) params.set('tag', filterTag);
+		if (filterCounterparty) params.set('counterparty', filterCounterparty);
+		if (filterPerson) params.set('person', filterPerson);
 		goto(`/documents${params.toString() ? '?' + params.toString() : ''}`, {
 			replaceState: true,
 			keepFocus: true
@@ -222,12 +246,40 @@
 				</select>
 			{/if}
 
-			{#if filterCategory || filterStatus || filterTag}
+			{#if counterparties.length > 0}
+				<select
+					bind:value={filterCounterparty}
+					on:change={handleFilterChange}
+					class="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+				>
+					<option value="">All Counterparties</option>
+					{#each counterparties as cp}
+						<option value={cp.id}>{cp.canonical_name}</option>
+					{/each}
+				</select>
+			{/if}
+
+			{#if persons.length > 0}
+				<select
+					bind:value={filterPerson}
+					on:change={handleFilterChange}
+					class="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+				>
+					<option value="">All Persons</option>
+					{#each persons as person}
+						<option value={person.id}>{person.canonical_name}</option>
+					{/each}
+				</select>
+			{/if}
+
+			{#if filterCategory || filterStatus || filterTag || filterCounterparty || filterPerson}
 				<button
 					on:click={() => {
 						filterCategory = '';
 						filterStatus = '';
 						filterTag = '';
+						filterCounterparty = '';
+						filterPerson = '';
 						handleFilterChange();
 					}}
 					class="text-sm text-slate-500 hover:text-slate-700"

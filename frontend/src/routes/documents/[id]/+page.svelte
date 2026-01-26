@@ -10,12 +10,23 @@
 		removeTag,
 		reprocessDocument,
 		getDocumentFileUrl,
-		type Document
+		getDocumentPersons,
+		addDocumentPerson,
+		removeDocumentPerson,
+		getCounterparty,
+		createCounterparty,
+		createPerson,
+		type Document,
+		type DocumentPerson,
+		type Counterparty
 	} from '$lib/api';
 	import PdfViewer from '$components/PdfViewer.svelte';
 	import TagEditor from '$components/TagEditor.svelte';
+	import EntityPicker from '$components/EntityPicker.svelte';
 
 	let document: Document | null = null;
+	let documentPersons: DocumentPerson[] = [];
+	let counterpartyEntity: Counterparty | null = null;
 	let loading = true;
 	let deleting = false;
 	let reprocessing = false;
@@ -25,6 +36,7 @@
 	let showDeleteConfirm = false;
 	let showRawText = false;
 	let editMode = false;
+	let showAddPerson = false;
 
 	const CATEGORIES = [
 		'utilities',
@@ -61,6 +73,20 @@
 		loading = true;
 		try {
 			document = await getDocument(docId);
+
+			// Load linked persons
+			documentPersons = await getDocumentPersons(docId);
+
+			// Load counterparty entity if linked
+			if (document.counterparty_id) {
+				try {
+					counterpartyEntity = await getCounterparty(document.counterparty_id);
+				} catch {
+					counterpartyEntity = null;
+				}
+			} else {
+				counterpartyEntity = null;
+			}
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load document';
 		} finally {
@@ -186,6 +212,67 @@
 
 	function getCategoryClass(category: string | null): string {
 		return category ? `badge-${category}` : 'badge-other';
+	}
+
+	async function handleCounterpartySelect(
+		event: CustomEvent<{ id: string; name: string } | null>
+	) {
+		const selection = event.detail;
+		try {
+			if (selection) {
+				await updateDocument(docId, { counterparty_id: selection.id });
+			} else {
+				await updateDocument(docId, { counterparty_id: null });
+			}
+			await loadDocument();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to update counterparty';
+		}
+	}
+
+	async function handleCreateCounterparty(event: CustomEvent<string>) {
+		const name = event.detail;
+		try {
+			const newEntity = await createCounterparty({ canonical_name: name });
+			await updateDocument(docId, { counterparty_id: newEntity.id });
+			await loadDocument();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to create counterparty';
+		}
+	}
+
+	async function handlePersonSelect(event: CustomEvent<{ id: string; name: string } | null>) {
+		const selection = event.detail;
+		if (selection) {
+			try {
+				await addDocumentPerson(docId, selection.id, 'affected');
+				await loadDocument();
+				showAddPerson = false;
+			} catch (e) {
+				error = e instanceof Error ? e.message : 'Failed to add person';
+			}
+		}
+	}
+
+	async function handleCreatePerson(event: CustomEvent<string>) {
+		const name = event.detail;
+		try {
+			const newEntity = await createPerson({ canonical_name: name });
+			await addDocumentPerson(docId, newEntity.id, 'affected');
+			await loadDocument();
+			showAddPerson = false;
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to create person';
+		}
+	}
+
+	async function handleRemovePerson(personId: string) {
+		try {
+			await removeDocumentPerson(docId, personId);
+			await loadDocument();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to remove person';
+		}
 	}
 </script>
 
@@ -324,23 +411,73 @@
 							</div>
 
 							<div>
-								<label for="edit-counterparty" class="block text-sm font-medium text-slate-500">Counterparty</label>
-								<input
-									id="edit-counterparty"
-									type="text"
-									bind:value={editData.counterparty}
-									class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500"
+								<label class="block text-sm font-medium text-slate-500 mb-1">Counterparty</label>
+								<EntityPicker
+									entityType="counterparty"
+									value={document?.counterparty_id || null}
+									selectedName={counterpartyEntity?.canonical_name || null}
+									placeholder="Search counterparties..."
+									on:select={handleCounterpartySelect}
+									on:create={handleCreateCounterparty}
 								/>
+								{#if document?.counterparty && !document?.counterparty_id}
+									<p class="mt-1 text-xs text-slate-400">
+										Extracted: {document.counterparty}
+									</p>
+								{/if}
 							</div>
 
 							<div>
-								<label for="edit-affected-person" class="block text-sm font-medium text-slate-500">Affected Person</label>
-								<input
-									id="edit-affected-person"
-									type="text"
-									bind:value={editData.affected_person}
-									class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500"
-								/>
+								<label class="block text-sm font-medium text-slate-500 mb-1">Persons</label>
+								{#if documentPersons.length > 0}
+									<div class="space-y-1 mb-2">
+										{#each documentPersons as dp}
+											<div class="flex items-center justify-between px-2 py-1 bg-slate-50 rounded">
+												<span class="text-sm">{dp.person.canonical_name}</span>
+												<button
+													type="button"
+													on:click={() => handleRemovePerson(dp.person.id)}
+													class="p-1 text-slate-400 hover:text-red-600"
+												>
+													<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+													</svg>
+												</button>
+											</div>
+										{/each}
+									</div>
+								{/if}
+								{#if showAddPerson}
+									<EntityPicker
+										entityType="person"
+										placeholder="Search persons..."
+										on:select={handlePersonSelect}
+										on:create={handleCreatePerson}
+									/>
+									<button
+										type="button"
+										on:click={() => (showAddPerson = false)}
+										class="mt-1 text-xs text-slate-500 hover:text-slate-700"
+									>
+										Cancel
+									</button>
+								{:else}
+									<button
+										type="button"
+										on:click={() => (showAddPerson = true)}
+										class="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700"
+									>
+										<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+										</svg>
+										Add person
+									</button>
+								{/if}
+								{#if document?.affected_person && documentPersons.length === 0}
+									<p class="mt-1 text-xs text-slate-400">
+										Extracted: {document.affected_person}
+									</p>
+								{/if}
 							</div>
 
 							<div>
@@ -387,19 +524,46 @@
 								</div>
 							{/if}
 
-							{#if document.counterparty}
-								<div>
-									<dt class="text-sm font-medium text-slate-500">Counterparty</dt>
-									<dd class="mt-1 text-sm text-slate-900">{document.counterparty}</dd>
-								</div>
-							{/if}
+							<div>
+								<dt class="text-sm font-medium text-slate-500">Counterparty</dt>
+								<dd class="mt-1 text-sm text-slate-900">
+									{#if counterpartyEntity}
+										<span class="inline-flex items-center gap-1 px-2 py-1 bg-primary-50 text-primary-700 rounded text-sm">
+											{counterpartyEntity.canonical_name}
+										</span>
+									{:else if document.counterparty}
+										<span class="text-slate-500">{document.counterparty}</span>
+										{#if document.counterparty_disambiguation === 'pending'}
+											<span class="ml-1 text-xs text-amber-600">(needs review)</span>
+										{/if}
+									{:else}
+										<span class="text-slate-400">-</span>
+									{/if}
+								</dd>
+							</div>
 
-							{#if document.affected_person}
-								<div>
-									<dt class="text-sm font-medium text-slate-500">Affected Person</dt>
-									<dd class="mt-1 text-sm text-slate-900">{document.affected_person}</dd>
-								</div>
-							{/if}
+							<div>
+								<dt class="text-sm font-medium text-slate-500">Persons</dt>
+								<dd class="mt-1">
+									{#if documentPersons.length > 0}
+										<div class="flex flex-wrap gap-1">
+											{#each documentPersons as dp}
+												<span class="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 text-slate-700 rounded text-sm">
+													{dp.person.canonical_name}
+													<span class="text-xs text-slate-400">({dp.role})</span>
+												</span>
+											{/each}
+										</div>
+									{:else if document.affected_person}
+										<span class="text-slate-500">{document.affected_person}</span>
+										{#if document.persons_disambiguation === 'pending'}
+											<span class="ml-1 text-xs text-amber-600">(needs review)</span>
+										{/if}
+									{:else}
+										<span class="text-slate-400">-</span>
+									{/if}
+								</dd>
+							</div>
 
 							{#if document.reference}
 								<div>

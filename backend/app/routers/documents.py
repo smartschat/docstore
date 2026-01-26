@@ -14,8 +14,11 @@ from app.config import get_settings
 from app.models import (
     Document,
     DocumentList,
+    DocumentPerson,
+    DocumentPersonLink,
     DocumentStatus,
     DocumentUpdate,
+    LinkedPerson,
     Tag,
 )
 from app.services.watcher import get_mime_type, process_document
@@ -50,7 +53,12 @@ async def get_document_tags(doc_id: str) -> list[Tag]:
         return [Tag(id=row["id"], name=row["name"]) for row in rows]
 
 
-def row_to_document(row: dict, tags: list[Tag] = None) -> Document:
+def row_to_document(
+    row: dict,
+    tags: list[Tag] = None,
+    counterparty_name: str = None,
+    linked_persons: list[LinkedPerson] = None,
+) -> Document:
     """Convert database row to Document model."""
     return Document(
         id=row["id"],
@@ -74,8 +82,51 @@ def row_to_document(row: dict, tags: list[Tag] = None) -> Document:
         affected_person=row.get("affected_person"),
         category=row.get("category"),
         reference=row.get("reference"),
+        counterparty_id=row.get("counterparty_id"),
+        counterparty_disambiguation=row.get("counterparty_disambiguation"),
+        persons_disambiguation=row.get("persons_disambiguation"),
+        counterparty_name=counterparty_name,
+        linked_persons=linked_persons or [],
         tags=tags or [],
     )
+
+
+async def get_counterparty_name(counterparty_id: str) -> str | None:
+    """Get counterparty canonical name by ID."""
+    if not counterparty_id:
+        return None
+    async with aiosqlite.connect(settings.database_path) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT canonical_name FROM counterparties WHERE id = ?",
+            (counterparty_id,),
+        )
+        row = await cursor.fetchone()
+        return row["canonical_name"] if row else None
+
+
+async def get_linked_persons(doc_id: str) -> list[LinkedPerson]:
+    """Get linked persons for a document."""
+    async with aiosqlite.connect(settings.database_path) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """
+            SELECT p.id, p.canonical_name, dp.role
+            FROM persons p
+            JOIN document_persons dp ON dp.person_id = p.id
+            WHERE dp.document_id = ?
+            """,
+            (doc_id,),
+        )
+        rows = await cursor.fetchall()
+        return [
+            LinkedPerson(
+                id=row["id"],
+                canonical_name=row["canonical_name"],
+                role=row["role"] or "affected",
+            )
+            for row in rows
+        ]
 
 
 @router.get("", response_model=DocumentList)
@@ -86,6 +137,8 @@ async def list_documents(
     affected_person: Optional[str] = None,
     status: Optional[str] = None,
     tag: Optional[str] = None,
+    counterparty_id: Optional[str] = None,
+    person_id: Optional[str] = None,
     _: str = Depends(get_current_session),
 ):
     """List documents with optional filtering and pagination."""
@@ -120,6 +173,19 @@ async def list_documents(
             """)
             params.append(tag)
 
+        if counterparty_id:
+            where_clauses.append("counterparty_id = ?")
+            params.append(counterparty_id)
+
+        if person_id:
+            where_clauses.append("""
+                id IN (
+                    SELECT document_id FROM document_persons
+                    WHERE person_id = ?
+                )
+            """)
+            params.append(person_id)
+
         where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
         # Get total count
@@ -140,8 +206,16 @@ async def list_documents(
 
         documents = []
         for row in rows:
-            tags = await get_document_tags(row["id"])
-            documents.append(row_to_document(dict(row), tags))
+            row_dict = dict(row)
+            tags = await get_document_tags(row_dict["id"])
+            counterparty_name = await get_counterparty_name(row_dict.get("counterparty_id"))
+            linked_persons = await get_linked_persons(row_dict["id"])
+            documents.append(row_to_document(
+                row_dict,
+                tags,
+                counterparty_name=counterparty_name,
+                linked_persons=linked_persons,
+            ))
 
         return DocumentList(
             items=documents,
@@ -162,7 +236,14 @@ async def get_document(
         raise HTTPException(status_code=404, detail="Document not found")
 
     tags = await get_document_tags(doc_id)
-    return row_to_document(row, tags)
+    counterparty_name = await get_counterparty_name(row.get("counterparty_id"))
+    linked_persons = await get_linked_persons(doc_id)
+    return row_to_document(
+        row,
+        tags,
+        counterparty_name=counterparty_name,
+        linked_persons=linked_persons,
+    )
 
 
 @router.post("/upload", response_model=Document)
@@ -210,7 +291,9 @@ async def upload_document(
 
     row = await get_document_by_id(doc_id)
     tags = await get_document_tags(doc_id)
-    return row_to_document(row, tags)
+    counterparty_name = await get_counterparty_name(row.get("counterparty_id"))
+    linked_persons = await get_linked_persons(doc_id)
+    return row_to_document(row, tags, counterparty_name=counterparty_name, linked_persons=linked_persons)
 
 
 @router.patch("/{doc_id}", response_model=Document)
@@ -226,6 +309,21 @@ async def update_document(
 
     # Build update query dynamically based on provided fields
     update_data = update.model_dump(exclude_unset=True)
+
+    # If counterparty_id is being set, also update disambiguation status and add alias
+    if "counterparty_id" in update_data:
+        if update_data["counterparty_id"] is not None:
+            update_data["counterparty_disambiguation"] = "confirmed"
+            # Add the raw counterparty name as an alias for future matching
+            if row.get("counterparty"):
+                from app.services.entities import add_counterparty_alias
+                await add_counterparty_alias(
+                    update_data["counterparty_id"],
+                    row["counterparty"],
+                    "llm_extracted"
+                )
+        else:
+            update_data["counterparty_disambiguation"] = "unmatched"
 
     if update_data:
         async with aiosqlite.connect(settings.database_path) as db:
@@ -245,7 +343,9 @@ async def update_document(
 
     row = await get_document_by_id(doc_id)
     tags = await get_document_tags(doc_id)
-    return row_to_document(row, tags)
+    counterparty_name = await get_counterparty_name(row.get("counterparty_id"))
+    linked_persons = await get_linked_persons(doc_id)
+    return row_to_document(row, tags, counterparty_name=counterparty_name, linked_persons=linked_persons)
 
 
 @router.delete("/{doc_id}")
@@ -410,3 +510,69 @@ async def remove_tag(
             await db.commit()
 
     return {"message": "Tag removed"}
+
+
+# ============== Document Persons ==============
+
+
+@router.get("/{doc_id}/persons", response_model=list[DocumentPerson])
+async def get_document_persons(
+    doc_id: str,
+    _: str = Depends(get_current_session),
+):
+    """Get all persons linked to a document."""
+    from app.services import entities
+
+    row = await get_document_by_id(doc_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return await entities.get_document_persons(doc_id)
+
+
+@router.post("/{doc_id}/persons")
+async def add_document_person(
+    doc_id: str,
+    data: DocumentPersonLink,
+    _: str = Depends(get_current_session),
+):
+    """Link a person to a document."""
+    from app.services import entities
+
+    row = await get_document_by_id(doc_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    person = await entities.get_person(data.person_id)
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+
+    success = await entities.link_person_to_document(doc_id, data.person_id, data.role)
+    if not success:
+        raise HTTPException(status_code=400, detail="Person already linked to document")
+
+    # Update disambiguation status
+    async with aiosqlite.connect(settings.database_path) as db:
+        await db.execute(
+            "UPDATE documents SET persons_disambiguation = 'confirmed' WHERE id = ?",
+            (doc_id,),
+        )
+        await db.commit()
+
+    return {"message": "Person linked to document"}
+
+
+@router.delete("/{doc_id}/persons/{person_id}")
+async def remove_document_person(
+    doc_id: str,
+    person_id: str,
+    _: str = Depends(get_current_session),
+):
+    """Unlink a person from a document."""
+    from app.services import entities
+
+    success = await entities.unlink_person_from_document(doc_id, person_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Link not found")
+
+    return {"message": "Person unlinked from document"}

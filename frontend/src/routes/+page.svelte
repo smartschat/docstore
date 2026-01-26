@@ -143,6 +143,53 @@
 			</div>
 		{/if}
 
+		<!-- Counterparties and Persons -->
+		<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+			{#if stats.top_counterparties.length > 0}
+				<div class="bg-white rounded-xl shadow-sm p-6">
+					<div class="flex justify-between items-center mb-4">
+						<h3 class="text-lg font-semibold text-slate-900">Top Counterparties</h3>
+						<a href="/entities" class="text-sm text-primary-600 hover:text-primary-700">
+							Manage
+						</a>
+					</div>
+					<div class="space-y-2">
+						{#each stats.top_counterparties as cp}
+							<a
+								href="/documents?counterparty={cp.id}"
+								class="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors"
+							>
+								<span class="text-sm font-medium text-slate-700">{cp.name}</span>
+								<span class="text-sm text-slate-500">{cp.count} docs</span>
+							</a>
+						{/each}
+					</div>
+				</div>
+			{/if}
+
+			{#if stats.top_persons.length > 0}
+				<div class="bg-white rounded-xl shadow-sm p-6">
+					<div class="flex justify-between items-center mb-4">
+						<h3 class="text-lg font-semibold text-slate-900">Top Persons</h3>
+						<a href="/entities" class="text-sm text-primary-600 hover:text-primary-700">
+							Manage
+						</a>
+					</div>
+					<div class="space-y-2">
+						{#each stats.top_persons as person}
+							<a
+								href="/documents?person={person.id}"
+								class="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors"
+							>
+								<span class="text-sm font-medium text-slate-700">{person.name}</span>
+								<span class="text-sm text-slate-500">{person.count} docs</span>
+							</a>
+						{/each}
+					</div>
+				</div>
+			{/if}
+		</div>
+
 		<!-- Recent Documents -->
 		{#if stats.recent_documents.length > 0}
 			<div class="bg-white rounded-xl shadow-sm p-6">

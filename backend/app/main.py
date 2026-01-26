@@ -24,11 +24,12 @@ from app.models import (
     DashboardStats,
     Document,
     DocumentStatus,
+    EntityCount,
     LoginRequest,
     LoginResponse,
     Tag,
 )
-from app.routers import documents, qa, search
+from app.routers import documents, entities, qa, search
 from app.services.queue import get_queue_stats, start_queue_processor, stop_queue_processor
 from app.services.watcher import folder_watcher, process_existing_inbox
 
@@ -123,6 +124,7 @@ app.add_middleware(
 app.include_router(documents.router)
 app.include_router(search.router)
 app.include_router(qa.router)
+app.include_router(entities.router)
 
 
 # Health check (no auth required)
@@ -239,11 +241,50 @@ async def get_stats(_: str = Depends(get_current_session)):
                 )
             )
 
+        # Top counterparties
+        cursor = await db.execute("""
+            SELECT c.id, c.canonical_name, COUNT(d.id) as count
+            FROM counterparties c
+            JOIN documents d ON d.counterparty_id = c.id
+            GROUP BY c.id
+            ORDER BY count DESC
+            LIMIT 10
+        """)
+        top_counterparties = [
+            EntityCount(id=row["id"], name=row["canonical_name"], count=row["count"])
+            for row in await cursor.fetchall()
+        ]
+
+        # Top persons
+        cursor = await db.execute("""
+            SELECT p.id, p.canonical_name, COUNT(dp.document_id) as count
+            FROM persons p
+            JOIN document_persons dp ON dp.person_id = p.id
+            GROUP BY p.id
+            ORDER BY count DESC
+            LIMIT 10
+        """)
+        top_persons = [
+            EntityCount(id=row["id"], name=row["canonical_name"], count=row["count"])
+            for row in await cursor.fetchall()
+        ]
+
+        # Pending reviews count
+        cursor = await db.execute("""
+            SELECT COUNT(*) as count FROM documents
+            WHERE (counterparty_disambiguation = 'pending' AND counterparty IS NOT NULL AND counterparty != '')
+               OR (persons_disambiguation = 'pending' AND affected_person IS NOT NULL AND affected_person != '')
+        """)
+        pending_reviews = (await cursor.fetchone())["count"]
+
         return DashboardStats(
             total_documents=total,
             documents_by_category=by_category,
             documents_by_status=by_status,
             recent_documents=recent,
+            top_counterparties=top_counterparties,
+            top_persons=top_persons,
+            pending_reviews=pending_reviews,
         )
 
 
@@ -293,6 +334,7 @@ async def reprocess_document(
 
         # Re-run extraction
         if ocr_result.text:
+            from app.services.entities import disambiguate_document
             from app.services.extraction import check_ollama_available
             from app.services.watcher import update_extraction_status
 
@@ -300,6 +342,9 @@ async def reprocess_document(
                 extraction_result = await process_document_extraction(doc_id, ocr_result.text)
                 await update_document_extraction(doc_id, extraction_result)
                 await update_extraction_status(doc_id, "completed")
+
+                # Run entity disambiguation
+                await disambiguate_document(doc_id)
             else:
                 await update_extraction_status(doc_id, "pending")
 

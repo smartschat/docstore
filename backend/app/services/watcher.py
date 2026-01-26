@@ -226,6 +226,12 @@ async def process_document(file_path: Path) -> Optional[str]:
                 extraction_result = await process_document_extraction(doc_id, ocr_result.text)
                 await update_document_extraction(doc_id, extraction_result)
                 await update_extraction_status(doc_id, "completed")
+
+                # Run entity disambiguation
+                from app.services.entities import disambiguate_document
+
+                await disambiguate_document(doc_id)
+
                 # Fully processed
                 await update_document_status(doc_id, DocumentStatus.COMPLETED)
                 print(f"Successfully processed document: {doc_id}")
