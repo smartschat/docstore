@@ -84,7 +84,7 @@ export async function generatePdf(
 
     // Yield to UI thread between pages to prevent freezing
     await new Promise((resolve) => {
-      if ('requestIdleCallback' in window) {
+      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
         requestIdleCallback(() => resolve(undefined), { timeout: 100 });
       } else {
         setTimeout(resolve, 0);

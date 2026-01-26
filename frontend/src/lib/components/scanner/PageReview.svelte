@@ -69,7 +69,11 @@
 	}
 
 	// Touch/Pointer-based drag (mobile)
+	// Only handle touch/pen pointers - let mouse use HTML5 drag instead
 	function handlePointerDown(event: PointerEvent, index: number) {
+		// Skip mouse events - let HTML5 drag handle them
+		if (event.pointerType === 'mouse') return;
+
 		const target = event.target as HTMLElement;
 		// Only start drag from drag handle
 		if (!target.closest('[data-drag-handle]')) return;
@@ -87,7 +91,10 @@
 	function handlePointerMove(event: PointerEvent) {
 		if (!isTouchDragging || draggedIndex === null) return;
 
-		event.preventDefault();
+		// Only prevent default for touch - mouse uses HTML5 drag
+		if (event.pointerType !== 'mouse') {
+			event.preventDefault();
+		}
 
 		// Find element under touch point
 		const elementsAtPoint = document.elementsFromPoint(event.clientX, event.clientY);

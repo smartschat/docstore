@@ -20,7 +20,8 @@
 		goToCamera,
 		setGenerating,
 		setUploading,
-		resetScanner
+		resetScanner,
+		openScanner
 	} from '$lib/stores/scanner';
 	import { generatePdf, pdfBlobToFile } from '$lib/services/pdf-generator';
 
@@ -38,10 +39,14 @@
 	// Session ID increments on each modal open to detect stale operations
 	let sessionId = 0;
 
-	// Handle escape key
+	// Handle keyboard events (escape and focus trap)
 	function handleKeydown(event: KeyboardEvent) {
-		if (event.key === 'Escape' && open) {
+		if (!open) return;
+
+		if (event.key === 'Escape') {
 			handleClose();
+		} else if (event.key === 'Tab') {
+			handleFocusTrap(event);
 		}
 	}
 
@@ -68,6 +73,8 @@
 		abortController = null;
 		// Increment session ID so any in-flight operations from previous sessions are invalidated
 		sessionId++;
+		// Transition to camera state so header and state-driven logic work correctly
+		openScanner();
 	} else if (browser) {
 		// Cancel any in-progress operations when closed externally
 		isCancelled = true;
@@ -75,9 +82,61 @@
 		resetScanner();
 	}
 
-	// Focus trap
+	// Focus modal when opened
 	$: if (open && modalElement) {
 		modalElement.focus();
+	}
+
+	// Focus trap - keep focus within modal
+	function handleFocusTrap(event: KeyboardEvent) {
+		if (event.key !== 'Tab' || !modalElement) return;
+
+		// Query focusable elements and filter out disabled and hidden ones
+		const allFocusable = modalElement.querySelectorAll<HTMLElement>(
+			'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+		);
+		const focusableElements = Array.from(allFocusable).filter((el) => {
+			// Filter out disabled elements
+			if (el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true') {
+				return false;
+			}
+			// Filter out hidden elements (display:none, visibility:hidden, or zero size)
+			if (el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0) {
+				return false;
+			}
+			return true;
+		});
+
+		if (focusableElements.length === 0) return;
+
+		const firstElement = focusableElements[0];
+		const lastElement = focusableElements[focusableElements.length - 1];
+		const activeIndex = focusableElements.indexOf(document.activeElement as HTMLElement);
+
+		// If active element is not in the list (e.g., on modal container), redirect
+		if (activeIndex === -1) {
+			event.preventDefault();
+			if (event.shiftKey) {
+				lastElement.focus();
+			} else {
+				firstElement.focus();
+			}
+			return;
+		}
+
+		if (event.shiftKey) {
+			// Shift+Tab: if on first element, wrap to last
+			if (activeIndex === 0) {
+				event.preventDefault();
+				lastElement.focus();
+			}
+		} else {
+			// Tab: if on last element, wrap to first
+			if (activeIndex === focusableElements.length - 1) {
+				event.preventDefault();
+				firstElement.focus();
+			}
+		}
 	}
 
 	function handleClose() {

@@ -108,23 +108,24 @@ export function stopAllTracks(stream: MediaStream | null): void {
  *
  * Uses screen.orientation.type to determine physical orientation,
  * which works correctly on both portrait-native phones and landscape-native tablets.
- * (angle alone is relative to device's natural orientation, not to portrait)
+ * Falls back to matchMedia for devices without screen.orientation API.
  */
 function getOrientationCorrection(videoWidth: number, videoHeight: number): number {
-  // Determine device's current physical orientation from type
-  // Type directly tells us portrait vs landscape regardless of device's natural orientation
+  // Determine device's current physical orientation
   let deviceIsPortrait = true;
   let isSecondary = false; // secondary = upside-down or rotated the other way
 
-  if (typeof screen !== 'undefined' && screen.orientation) {
+  if (typeof screen !== 'undefined' && screen.orientation?.type) {
+    // Modern API - type directly tells us portrait vs landscape
     const type = screen.orientation.type;
     deviceIsPortrait = type.startsWith('portrait');
     isSecondary = type.endsWith('secondary');
-  } else if (typeof window !== 'undefined' && 'orientation' in window) {
-    // Legacy API (iOS Safari) - returns 0, 90, -90, 180
-    const orientation = window.orientation as number;
-    deviceIsPortrait = orientation === 0 || orientation === 180;
-    isSecondary = orientation === 180 || orientation === -90;
+  } else if (typeof window !== 'undefined' && window.matchMedia) {
+    // Fallback using matchMedia - works on older devices including landscape-native iPads
+    // matchMedia reflects actual viewport orientation regardless of device's natural orientation
+    deviceIsPortrait = window.matchMedia('(orientation: portrait)').matches;
+    // Cannot reliably detect secondary (upside-down) without screen.orientation,
+    // so we default to primary orientation (isSecondary = false)
   }
 
   const isVideoLandscape = videoWidth > videoHeight;
