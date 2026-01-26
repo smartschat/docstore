@@ -234,7 +234,7 @@
 		aria-label="Document Scanner"
 		tabindex="-1"
 	>
-		<div class="w-full h-full sm:max-w-2xl sm:max-h-[90vh] sm:h-auto sm:rounded-xl bg-white overflow-hidden flex flex-col shadow-2xl">
+		<div class="w-full h-full sm:max-w-2xl sm:max-h-[90vh] sm:h-[80vh] sm:rounded-xl bg-white overflow-hidden flex flex-col shadow-2xl">
 			<!-- Header -->
 			<div class="flex items-center justify-between px-4 py-3 bg-slate-900 text-white">
 				<h2 class="text-lg font-semibold">

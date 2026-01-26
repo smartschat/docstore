@@ -69,6 +69,12 @@
 
 			if (videoElement && cameraStream) {
 				videoElement.srcObject = cameraStream.stream;
+				// Explicitly play - required on some browsers (especially Safari on Mac)
+				try {
+					await videoElement.play();
+				} catch (playError) {
+					console.warn('Video autoplay failed:', playError);
+				}
 			}
 
 			// Re-check for multiple cameras after permission granted
@@ -131,6 +137,11 @@
 					cameraStream = stream;
 					if (videoElement && cameraStream) {
 						videoElement.srcObject = cameraStream.stream;
+						try {
+							await videoElement.play();
+						} catch (playError) {
+							console.warn('Video autoplay failed on restart:', playError);
+						}
 					}
 					// Clear any previous error on successful restart
 					cameraError = null;
