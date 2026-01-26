@@ -103,36 +103,51 @@ export function stopAllTracks(stream: MediaStream | null): void {
 }
 
 /**
- * Get the current device orientation angle
+ * Get the current device orientation correction
  * Returns rotation needed to correct the image (0, 90, 180, 270)
+ *
+ * Uses screen.orientation.type to determine physical orientation,
+ * which works correctly on both portrait-native phones and landscape-native tablets.
+ * (angle alone is relative to device's natural orientation, not to portrait)
  */
 function getOrientationCorrection(videoWidth: number, videoHeight: number): number {
-  // Detect device orientation
-  let deviceOrientation = 0;
+  // Determine device's current physical orientation from type
+  // Type directly tells us portrait vs landscape regardless of device's natural orientation
+  let deviceIsPortrait = true;
+  let isSecondary = false; // secondary = upside-down or rotated the other way
 
   if (typeof screen !== 'undefined' && screen.orientation) {
-    // Modern API
     const type = screen.orientation.type;
-    if (type.includes('landscape')) {
-      deviceOrientation = type.includes('secondary') ? 270 : 90;
-    } else {
-      deviceOrientation = type.includes('secondary') ? 180 : 0;
-    }
+    deviceIsPortrait = type.startsWith('portrait');
+    isSecondary = type.endsWith('secondary');
   } else if (typeof window !== 'undefined' && 'orientation' in window) {
-    // Legacy API (iOS Safari)
-    deviceOrientation = Math.abs(window.orientation as number);
+    // Legacy API (iOS Safari) - returns 0, 90, -90, 180
+    const orientation = window.orientation as number;
+    deviceIsPortrait = orientation === 0 || orientation === 180;
+    isSecondary = orientation === 180 || orientation === -90;
   }
 
-  // On mobile in portrait mode (0 or 180), if video is wider than tall,
-  // the camera feed likely needs rotation
   const isVideoLandscape = videoWidth > videoHeight;
-  const isDevicePortrait = deviceOrientation === 0 || deviceOrientation === 180;
+  const isVideoPortrait = videoHeight > videoWidth;
 
-  if (isDevicePortrait && isVideoLandscape) {
-    // Video needs 90 degree clockwise rotation to match portrait device
-    return 90;
+  // Case 1: Device in portrait, video is landscape (typical mobile camera)
+  // Need to rotate video to match portrait display
+  if (deviceIsPortrait && isVideoLandscape) {
+    return isSecondary ? 270 : 90;
   }
 
+  // Case 2: Device in landscape, video is portrait
+  // Need to rotate video to match landscape display
+  if (!deviceIsPortrait && isVideoPortrait) {
+    return isSecondary ? 90 : 270;
+  }
+
+  // Case 3: Orientations match but device is in secondary (upside-down) position
+  if (isSecondary) {
+    return 180;
+  }
+
+  // Case 4: Orientations match and device is in primary position
   return 0;
 }
 
@@ -156,15 +171,11 @@ export async function captureImage(
 
   // Check if rotation is needed
   const rotation = getOrientationCorrection(videoWidth, videoHeight);
-  const needsRotation = rotation === 90 || rotation === 270;
+  const needsSwap = rotation === 90 || rotation === 270;
 
-  // For 90/270 rotation, swap width and height
-  let sourceWidth = videoWidth;
-  let sourceHeight = videoHeight;
-  if (needsRotation) {
-    sourceWidth = videoHeight;
-    sourceHeight = videoWidth;
-  }
+  // For 90/270 rotation, swap width and height for the output
+  let sourceWidth = needsSwap ? videoHeight : videoWidth;
+  let sourceHeight = needsSwap ? videoWidth : videoHeight;
 
   // Calculate scaled dimensions while maintaining aspect ratio
   let targetWidth = sourceWidth;
@@ -193,12 +204,23 @@ export async function captureImage(
   }
 
   // Apply rotation if needed
-  if (needsRotation) {
+  if (rotation !== 0) {
     ctx.translate(targetWidth / 2, targetHeight / 2);
     ctx.rotate((rotation * Math.PI) / 180);
-    // After rotation, we need to draw at offset that accounts for the swap
-    const drawWidth = rotation === 90 ? targetHeight : -targetHeight;
-    const drawHeight = rotation === 90 ? targetWidth : -targetWidth;
+
+    // Calculate draw dimensions based on rotation
+    let drawWidth: number;
+    let drawHeight: number;
+    if (needsSwap) {
+      // 90° or 270° rotation - swap dimensions
+      drawWidth = targetHeight;
+      drawHeight = targetWidth;
+    } else {
+      // 180° rotation - keep dimensions
+      drawWidth = targetWidth;
+      drawHeight = targetHeight;
+    }
+
     ctx.drawImage(video, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
   } else {
     ctx.drawImage(video, 0, 0, targetWidth, targetHeight);

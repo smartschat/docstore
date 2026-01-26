@@ -96,21 +96,33 @@
 		const page = addPage(blob);
 		// Only advance to preview if page was added (null means at limit)
 		if (page) {
+			// Clear any previous error on successful capture
+			scannerError.set(null);
 			goToPreview();
 		}
 	}
 
 	function handleCameraError(event: CustomEvent<string>) {
 		console.error('Camera error:', event.detail);
-		// Still allow using file picker fallback
+		// Show error to user (CameraView will show fallback file picker)
+		scannerError.set(event.detail);
+	}
+
+	function handleCameraReady() {
+		// Clear any camera error when camera successfully starts/restarts
+		scannerError.set(null);
 	}
 
 	function handleRetake() {
 		removeLastPage();
+		// Clear any error when going back to retake
+		scannerError.set(null);
 		goToCamera();
 	}
 
 	function handleAddPage() {
+		// Clear any error when going to add more pages
+		scannerError.set(null);
 		goToCamera();
 	}
 
@@ -121,6 +133,8 @@
 	async function handleSave() {
 		if ($pageCount === 0 || isCancelled) return;
 
+		// Clear any previous error before starting
+		scannerError.set(null);
 		setGenerating();
 
 		// Capture session ID to detect if modal was closed and reopened
@@ -237,6 +251,7 @@
 						bind:this={cameraView}
 						on:capture={handleCapture}
 						on:error={handleCameraError}
+						on:ready={handleCameraReady}
 					/>
 				{:else if $scannerState === 'preview' && $currentPreviewPage}
 					<PagePreview

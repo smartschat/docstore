@@ -15,6 +15,7 @@
 	const dispatch = createEventDispatcher<{
 		capture: Blob;
 		error: string;
+		ready: void;
 	}>();
 
 	let videoElement: HTMLVideoElement;
@@ -78,6 +79,9 @@
 			} catch {
 				// Ignore - will still work with single camera
 			}
+
+			// Notify that camera is ready (clears any previous error)
+			dispatch('ready');
 		} catch (error) {
 			console.error('Camera init error:', error);
 
@@ -130,6 +134,7 @@
 					}
 					// Clear any previous error on successful restart
 					cameraError = null;
+					dispatch('ready');
 				} catch (error) {
 					console.error('Failed to restart camera:', error);
 					// Show error UI so user can tap "Try Again"
