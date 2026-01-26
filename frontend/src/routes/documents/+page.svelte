@@ -203,7 +203,7 @@
 			{/if}
 			<button
 				on:click={() => (showUploadModal = true)}
-				class="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+				class="inline-flex items-center px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200"
 			>
 				<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -289,7 +289,7 @@
 			<p class="mt-1 text-sm text-slate-500">Get started by uploading a document.</p>
 			<button
 				on:click={() => (showUploadModal = true)}
-				class="mt-4 inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+				class="mt-4 inline-flex items-center px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200"
 			>
 				Upload Document
 			</button>
