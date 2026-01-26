@@ -48,7 +48,7 @@ make add pkg=package-name
 make update
 
 # Run backend directly with uv
-cd backend && uv run uvicorn app.main:app --reload
+cd backend && uv run python -m uvicorn app.main:app --reload
 ```
 
 ## Architecture

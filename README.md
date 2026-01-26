@@ -9,7 +9,7 @@ A self-hosted document management system with OCR, semantic search, and LLM-powe
 
 ## Features
 
-- **Document Ingestion**: Upload PDFs and images via web UI or drop files in the inbox folder
+- **Document Ingestion**: Upload PDFs and images via web UI, scan with camera, or drop files in the inbox folder
 - **OCR Processing**: Automatic text extraction using ocrmypdf with German + English support
 - **AI Classification**: Automatic document categorization via Ollama LLM
 - **Structured Extraction**: Extract title, counterparty, dates, and amounts from documents
@@ -217,7 +217,7 @@ make add pkg=some-package
 make update
 
 # Run with uv directly
-cd backend && uv run uvicorn app.main:app --reload
+cd backend && uv run python -m uvicorn app.main:app --reload
 ```
 
 ## Raspberry Pi Deployment
