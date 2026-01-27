@@ -310,12 +310,15 @@ async def update_document(
     # Build update query dynamically based on provided fields
     update_data = update.model_dump(exclude_unset=True)
 
-    # If counterparty_id is being set, also update disambiguation status and add alias
+    # Extract the add_alias flag before processing (not a DB field)
+    add_alias = update_data.pop("add_counterparty_alias", True)
+
+    # If counterparty_id is being set, also update disambiguation status and optionally add alias
     if "counterparty_id" in update_data:
         if update_data["counterparty_id"] is not None:
             update_data["counterparty_disambiguation"] = "confirmed"
-            # Add the raw counterparty name as an alias for future matching
-            if row.get("counterparty"):
+            # Add the raw counterparty name as an alias for future matching (if enabled)
+            if add_alias and row.get("counterparty"):
                 from app.services.entities import add_counterparty_alias
                 await add_counterparty_alias(
                     update_data["counterparty_id"],
@@ -550,6 +553,10 @@ async def add_document_person(
     success = await entities.link_person_to_document(doc_id, data.person_id, data.role)
     if not success:
         raise HTTPException(status_code=400, detail="Person already linked to document")
+
+    # Add the raw affected_person as an alias if enabled
+    if data.add_alias and row.get("affected_person"):
+        await entities.add_person_alias(data.person_id, row["affected_person"], "llm_extracted")
 
     # Update disambiguation status
     async with aiosqlite.connect(settings.database_path) as db:

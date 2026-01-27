@@ -211,6 +211,7 @@ export async function updateDocument(
 		document_date?: string;
 		summary?: string;
 		counterparty_id?: string | null;
+		add_counterparty_alias?: boolean;
 	}
 ): Promise<Document> {
 	return request(`/documents/${id}`, {
@@ -524,11 +525,12 @@ export async function getDocumentPersons(docId: string): Promise<DocumentPerson[
 export async function addDocumentPerson(
 	docId: string,
 	personId: string,
-	role: string = 'affected'
+	role: string = 'affected',
+	addAlias: boolean = true
 ): Promise<void> {
 	await request(`/documents/${docId}/persons`, {
 		method: 'POST',
-		body: JSON.stringify({ person_id: personId, role })
+		body: JSON.stringify({ person_id: personId, role, add_alias: addAlias })
 	});
 }
 

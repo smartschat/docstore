@@ -52,6 +52,8 @@ class DocumentUpdate(BaseModel):
     summary: Optional[str] = None
     # Entity linking
     counterparty_id: Optional[str] = None
+    # Control whether to add extracted name as alias (not persisted)
+    add_counterparty_alias: Optional[bool] = None
 
 
 class LinkedPerson(BaseModel):
@@ -274,6 +276,7 @@ class DocumentPerson(BaseModel):
 class DocumentPersonLink(BaseModel):
     person_id: str
     role: str = "affected"
+    add_alias: bool = True
 
 
 class DisambiguationCandidate(BaseModel):

@@ -37,6 +37,8 @@
 	let showRawText = false;
 	let editMode = false;
 	let showAddPerson = false;
+	let addCounterpartyAlias = true;
+	let addPersonAlias = true;
 
 	const CATEGORIES = [
 		'utilities',
@@ -220,7 +222,10 @@
 		const selection = event.detail;
 		try {
 			if (selection) {
-				await updateDocument(docId, { counterparty_id: selection.id });
+				await updateDocument(docId, {
+					counterparty_id: selection.id,
+					add_counterparty_alias: addCounterpartyAlias
+				});
 			} else {
 				await updateDocument(docId, { counterparty_id: null });
 			}
@@ -245,7 +250,7 @@
 		const selection = event.detail;
 		if (selection) {
 			try {
-				await addDocumentPerson(docId, selection.id, 'affected');
+				await addDocumentPerson(docId, selection.id, 'affected', addPersonAlias);
 				await loadDocument();
 				showAddPerson = false;
 			} catch (e) {
@@ -424,6 +429,14 @@
 									<p class="mt-1 text-xs text-slate-400">
 										Extracted: {document.counterparty}
 									</p>
+									<label class="mt-1 flex items-center gap-2 text-xs text-slate-500">
+										<input
+											type="checkbox"
+											bind:checked={addCounterpartyAlias}
+											class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+										/>
+										Add as alias when linking
+									</label>
 								{/if}
 							</div>
 
@@ -477,6 +490,14 @@
 									<p class="mt-1 text-xs text-slate-400">
 										Extracted: {document.affected_person}
 									</p>
+									<label class="mt-1 flex items-center gap-2 text-xs text-slate-500">
+										<input
+											type="checkbox"
+											bind:checked={addPersonAlias}
+											class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+										/>
+										Add as alias when linking
+									</label>
 								{/if}
 							</div>
 
