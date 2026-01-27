@@ -16,6 +16,7 @@
 		removePersonAlias,
 		mergeCounterparties,
 		mergePersons,
+		getStats,
 		type Counterparty,
 		type Person
 	} from '$lib/api';
@@ -34,6 +35,7 @@
 	}
 	let counterparties: Counterparty[] = [];
 	let persons: Person[] = [];
+	let pendingCount = 0;
 	let loading = true;
 	let error = '';
 	let search = '';
@@ -67,12 +69,14 @@
 		loading = true;
 		error = '';
 		try {
-			const [cpResponse, pResponse] = await Promise.all([
+			const [cpResponse, pResponse, stats] = await Promise.all([
 				listCounterparties(search || undefined),
-				listPersons(search || undefined)
+				listPersons(search || undefined),
+				getStats()
 			]);
 			counterparties = cpResponse.items;
 			persons = pResponse.items;
+			pendingCount = stats.pending_reviews;
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load data';
 		} finally {
@@ -304,7 +308,7 @@
 					? 'border-primary-600 text-primary-600'
 					: 'border-transparent text-slate-500 hover:text-slate-700'}"
 			>
-				Pending Review
+				Pending Review ({pendingCount})
 			</button>
 		</nav>
 	</div>
