@@ -1,4 +1,4 @@
-.PHONY: help install dev backend frontend build clean lint test test-unit test-integration test-coverage docker-build docker-run docker-stop db-init process-inbox add update
+.PHONY: help install dev backend frontend build clean lint test test-unit test-integration test-coverage docker-build docker-run docker-stop db-init process-inbox add update pre-commit
 
 # Default target
 help:
@@ -33,6 +33,8 @@ install:
 	cd frontend && npm install
 	@echo "Creating data directories..."
 	mkdir -p data/inbox data/archive
+	@echo "Installing pre-commit hooks..."
+	cd backend && uv run pre-commit install
 
 # Development
 dev:
@@ -55,11 +57,19 @@ build:
 
 # Lint
 lint:
+	@echo "Running Python formatter check (ruff)..."
+	cd backend && uv run ruff format --check .
 	@echo "Running Python linter (ruff)..."
-	cd backend && uv run ruff check app/
+	cd backend && uv run ruff check .
 	@echo "Running Svelte/TypeScript checker..."
 	cd frontend && npm run check
 	@echo "All checks passed!"
+
+# Pre-commit hooks
+pre-commit:
+	@echo "Installing pre-commit hooks..."
+	cd backend && uv run pre-commit install
+	@echo "Pre-commit hooks installed!"
 
 # Tests
 test:
