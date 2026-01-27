@@ -1,21 +1,18 @@
 """Unit tests for embeddings service."""
 
 import json
-import math
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiosqlite
 import numpy as np
 import pytest
-
 from app.services.embeddings import (
     _mean_pooling,
     _normalize,
     _search_similar_fallback,
     embed_document,
     generate_embedding,
-    search_similar,
     semantic_search,
     store_embedding,
 )
@@ -59,21 +56,22 @@ class TestMeanPooling:
 
     def test_batch_processing(self):
         """Pooling handles multiple sequences in batch."""
-        model_output = np.array([
-            [[1, 2], [3, 4]],  # Sequence 1
-            [[5, 6], [7, 8]]   # Sequence 2
-        ])
-        attention_mask = np.array([
-            [1, 1],
-            [1, 1]
-        ])
+        model_output = np.array(
+            [
+                [[1, 2], [3, 4]],  # Sequence 1
+                [[5, 6], [7, 8]],  # Sequence 2
+            ]
+        )
+        attention_mask = np.array([[1, 1], [1, 1]])
 
         result = _mean_pooling(model_output, attention_mask)
 
-        expected = np.array([
-            [2.0, 3.0],  # Mean of seq 1
-            [6.0, 7.0]   # Mean of seq 2
-        ])
+        expected = np.array(
+            [
+                [2.0, 3.0],  # Mean of seq 1
+                [6.0, 7.0],  # Mean of seq 2
+            ]
+        )
         np.testing.assert_array_almost_equal(result, expected)
 
 
@@ -100,10 +98,12 @@ class TestNormalize:
 
     def test_batch_normalization(self):
         """Multiple vectors are normalized independently."""
-        embeddings = np.array([
-            [3.0, 4.0],  # norm = 5
-            [1.0, 0.0]   # norm = 1
-        ])
+        embeddings = np.array(
+            [
+                [3.0, 4.0],  # norm = 5
+                [1.0, 0.0],  # norm = 1
+            ]
+        )
         normalized = _normalize(embeddings)
 
         np.testing.assert_array_almost_equal(normalized[0], [0.6, 0.8])
@@ -132,7 +132,7 @@ class TestGenerateEmbedding:
     @pytest.mark.asyncio
     async def test_returns_384_dim_vector(self):
         """Returns 384-dimensional embedding for MiniLM model."""
-        mock_embedding = np.random.randn(1, 384)
+        np.random.randn(1, 384)
 
         with patch("app.services.embeddings._load_model", return_value=True):
             with patch("app.services.embeddings._tokenizer") as mock_tokenizer:
@@ -202,7 +202,7 @@ async def fallback_db(tmp_path, test_settings):
         await db.commit()
 
     # Patch the settings database path for the embeddings module
-    with patch.object(test_settings, 'database_path', db_path):
+    with patch.object(test_settings, "database_path", db_path):
         yield str(db_path)
 
 
@@ -217,11 +217,11 @@ class TestSearchSimilarFallback:
         async with aiosqlite.connect(fallback_db) as db:
             await db.execute(
                 "INSERT INTO document_embeddings (doc_id, embedding) VALUES (?, ?)",
-                ("doc-1", json.dumps([1.0, 0.0, 0.0]))
+                ("doc-1", json.dumps([1.0, 0.0, 0.0])),
             )
             await db.commit()
 
-        with patch.object(test_settings, 'database_path', Path(fallback_db)):
+        with patch.object(test_settings, "database_path", Path(fallback_db)):
             results = await _search_similar_fallback(query_embedding, limit=10, category=None)
 
         assert len(results) == 1
@@ -236,11 +236,11 @@ class TestSearchSimilarFallback:
         async with aiosqlite.connect(fallback_db) as db:
             await db.execute(
                 "INSERT INTO document_embeddings (doc_id, embedding) VALUES (?, ?)",
-                ("doc-1", json.dumps([0.0, 1.0, 0.0]))  # Orthogonal to query
+                ("doc-1", json.dumps([0.0, 1.0, 0.0])),  # Orthogonal to query
             )
             await db.commit()
 
-        with patch.object(test_settings, 'database_path', Path(fallback_db)):
+        with patch.object(test_settings, "database_path", Path(fallback_db)):
             results = await _search_similar_fallback(query_embedding, limit=10, category=None)
 
         assert len(results) == 1
@@ -254,11 +254,11 @@ class TestSearchSimilarFallback:
         async with aiosqlite.connect(fallback_db) as db:
             await db.execute(
                 "INSERT INTO document_embeddings (doc_id, embedding) VALUES (?, ?)",
-                ("doc-1", json.dumps([-1.0, 0.0, 0.0]))
+                ("doc-1", json.dumps([-1.0, 0.0, 0.0])),
             )
             await db.commit()
 
-        with patch.object(test_settings, 'database_path', Path(fallback_db)):
+        with patch.object(test_settings, "database_path", Path(fallback_db)):
             results = await _search_similar_fallback(query_embedding, limit=10, category=None)
 
         assert len(results) == 1
@@ -272,15 +272,15 @@ class TestSearchSimilarFallback:
         async with aiosqlite.connect(fallback_db) as db:
             await db.execute(
                 "INSERT INTO document_embeddings (doc_id, embedding) VALUES (?, ?)",
-                ("doc-low", json.dumps([0.5, 0.5, 0.0]))  # Lower similarity
+                ("doc-low", json.dumps([0.5, 0.5, 0.0])),  # Lower similarity
             )
             await db.execute(
                 "INSERT INTO document_embeddings (doc_id, embedding) VALUES (?, ?)",
-                ("doc-high", json.dumps([0.9, 0.1, 0.0]))  # Higher similarity
+                ("doc-high", json.dumps([0.9, 0.1, 0.0])),  # Higher similarity
             )
             await db.commit()
 
-        with patch.object(test_settings, 'database_path', Path(fallback_db)):
+        with patch.object(test_settings, "database_path", Path(fallback_db)):
             results = await _search_similar_fallback(query_embedding, limit=10, category=None)
 
         assert len(results) == 2
@@ -296,11 +296,11 @@ class TestSearchSimilarFallback:
             for i in range(10):
                 await db.execute(
                     "INSERT INTO document_embeddings (doc_id, embedding) VALUES (?, ?)",
-                    (f"doc-{i}", json.dumps([1.0, 0.0, 0.0]))
+                    (f"doc-{i}", json.dumps([1.0, 0.0, 0.0])),
                 )
             await db.commit()
 
-        with patch.object(test_settings, 'database_path', Path(fallback_db)):
+        with patch.object(test_settings, "database_path", Path(fallback_db)):
             results = await _search_similar_fallback(query_embedding, limit=3, category=None)
 
         assert len(results) == 3
@@ -313,26 +313,32 @@ class TestSearchSimilarFallback:
         async with aiosqlite.connect(fallback_db) as db:
             # Add documents with different categories
             await db.execute(
-                "INSERT INTO documents (id, filename, file_path, file_hash, category, status) VALUES (?, ?, ?, ?, ?, ?)",
-                ("doc-001", "test1.pdf", "/path1", "hash1", "utilities", "completed")
+                """INSERT INTO documents
+                (id, filename, file_path, file_hash, category, status)
+                VALUES (?, ?, ?, ?, ?, ?)""",
+                ("doc-001", "test1.pdf", "/path1", "hash1", "utilities", "completed"),
             )
             await db.execute(
-                "INSERT INTO documents (id, filename, file_path, file_hash, category, status) VALUES (?, ?, ?, ?, ?, ?)",
-                ("doc-002", "test2.pdf", "/path2", "hash2", "insurance", "completed")
+                """INSERT INTO documents
+                (id, filename, file_path, file_hash, category, status)
+                VALUES (?, ?, ?, ?, ?, ?)""",
+                ("doc-002", "test2.pdf", "/path2", "hash2", "insurance", "completed"),
             )
             # Add embeddings
             await db.execute(
                 "INSERT INTO document_embeddings (doc_id, embedding) VALUES (?, ?)",
-                ("doc-001", json.dumps([1.0, 0.0, 0.0]))  # utilities category
+                ("doc-001", json.dumps([1.0, 0.0, 0.0])),  # utilities category
             )
             await db.execute(
                 "INSERT INTO document_embeddings (doc_id, embedding) VALUES (?, ?)",
-                ("doc-002", json.dumps([1.0, 0.0, 0.0]))  # insurance category
+                ("doc-002", json.dumps([1.0, 0.0, 0.0])),  # insurance category
             )
             await db.commit()
 
-        with patch.object(test_settings, 'database_path', Path(fallback_db)):
-            results = await _search_similar_fallback(query_embedding, limit=10, category="utilities")
+        with patch.object(test_settings, "database_path", Path(fallback_db)):
+            results = await _search_similar_fallback(
+                query_embedding, limit=10, category="utilities"
+            )
 
         assert len(results) == 1
         assert results[0][0] == "doc-001"
@@ -353,11 +359,13 @@ class TestSemanticSearch:
         """Returns list of (doc_id, score) tuples."""
         mock_embedding = [0.1] * 384
 
-        with patch("app.services.embeddings.generate_embedding", new=AsyncMock(return_value=mock_embedding)):
-            with patch("app.services.embeddings.search_similar", new=AsyncMock(return_value=[
-                ("doc-1", 0.95),
-                ("doc-2", 0.80)
-            ])):
+        with patch(
+            "app.services.embeddings.generate_embedding", new=AsyncMock(return_value=mock_embedding)
+        ):
+            with patch(
+                "app.services.embeddings.search_similar",
+                new=AsyncMock(return_value=[("doc-1", 0.95), ("doc-2", 0.80)]),
+            ):
                 result = await semantic_search("test query")
 
                 assert len(result) == 2
@@ -375,14 +383,13 @@ class TestStoreEmbedding:
 
         # Mock to use fallback (no sqlite-vec)
         with patch("app.services.embeddings._get_vec_connection", return_value=None):
-            with patch.object(test_settings, 'database_path', Path(fallback_db)):
+            with patch.object(test_settings, "database_path", Path(fallback_db)):
                 await store_embedding("test-doc", embedding)
 
         # Verify stored
         async with aiosqlite.connect(fallback_db) as db:
             cursor = await db.execute(
-                "SELECT embedding FROM document_embeddings WHERE doc_id = ?",
-                ("test-doc",)
+                "SELECT embedding FROM document_embeddings WHERE doc_id = ?", ("test-doc",)
             )
             row = await cursor.fetchone()
             assert row is not None
@@ -396,21 +403,20 @@ class TestStoreEmbedding:
         async with aiosqlite.connect(fallback_db) as db:
             await db.execute(
                 "INSERT INTO document_embeddings (doc_id, embedding) VALUES (?, ?)",
-                ("test-doc", json.dumps([1, 2, 3]))
+                ("test-doc", json.dumps([1, 2, 3])),
             )
             await db.commit()
 
         # Store new embedding
         new_embedding = [4, 5, 6]
         with patch("app.services.embeddings._get_vec_connection", return_value=None):
-            with patch.object(test_settings, 'database_path', Path(fallback_db)):
+            with patch.object(test_settings, "database_path", Path(fallback_db)):
                 await store_embedding("test-doc", new_embedding)
 
         # Verify replaced
         async with aiosqlite.connect(fallback_db) as db:
             cursor = await db.execute(
-                "SELECT embedding FROM document_embeddings WHERE doc_id = ?",
-                ("test-doc",)
+                "SELECT embedding FROM document_embeddings WHERE doc_id = ?", ("test-doc",)
             )
             row = await cursor.fetchone()
             stored_embedding = json.loads(row[0])
@@ -439,7 +445,9 @@ class TestEmbedDocument:
         """Generates embedding and stores it."""
         mock_embedding = [0.1] * 384
 
-        with patch("app.services.embeddings.generate_embedding", new=AsyncMock(return_value=mock_embedding)):
+        with patch(
+            "app.services.embeddings.generate_embedding", new=AsyncMock(return_value=mock_embedding)
+        ):
             with patch("app.services.embeddings.store_embedding", new=AsyncMock()) as mock_store:
                 await embed_document("doc-1", "Some document text")
 

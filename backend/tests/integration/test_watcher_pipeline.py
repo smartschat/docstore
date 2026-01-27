@@ -1,12 +1,10 @@
 """Integration tests for folder watcher pipeline."""
 
-import pytest
-from pathlib import Path
-from unittest.mock import patch, AsyncMock, MagicMock
-import json
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiosqlite
+import pytest
 
 
 class TestInboxProcessing:
@@ -27,10 +25,15 @@ class TestInboxProcessing:
         mock_ocr_result.page_count = 1
         mock_ocr_result.error = None
 
-        with patch("app.services.watcher.extract_text_from_file", new_callable=AsyncMock) as mock_ocr, \
-             patch("app.services.extraction.check_ollama_available", new_callable=AsyncMock) as mock_check, \
-             patch("app.services.embeddings.generate_embedding") as mock_embed:
-
+        with (
+            patch(
+                "app.services.watcher.extract_text_from_file", new_callable=AsyncMock
+            ) as mock_ocr,
+            patch(
+                "app.services.extraction.check_ollama_available", new_callable=AsyncMock
+            ) as mock_check,
+            patch("app.services.embeddings.generate_embedding") as mock_embed,
+        ):
             mock_ocr.return_value = mock_ocr_result
             mock_check.return_value = False
             mock_embed.return_value = [0.1] * 384
@@ -41,10 +44,7 @@ class TestInboxProcessing:
 
             # Verify document was created
             async with aiosqlite.connect(test_db) as db:
-                cursor = await db.execute(
-                    "SELECT * FROM documents WHERE id = ?",
-                    (doc_id,)
-                )
+                cursor = await db.execute("SELECT * FROM documents WHERE id = ?", (doc_id,))
                 row = await cursor.fetchone()
                 assert row is not None
 
@@ -69,10 +69,15 @@ class TestInboxProcessing:
         mock_ocr_result.page_count = 1
         mock_ocr_result.error = None
 
-        with patch("app.services.watcher.extract_text_from_file", new_callable=AsyncMock) as mock_ocr, \
-             patch("app.services.extraction.check_ollama_available", new_callable=AsyncMock) as mock_check, \
-             patch("app.services.embeddings.generate_embedding") as mock_embed:
-
+        with (
+            patch(
+                "app.services.watcher.extract_text_from_file", new_callable=AsyncMock
+            ) as mock_ocr,
+            patch(
+                "app.services.extraction.check_ollama_available", new_callable=AsyncMock
+            ) as mock_check,
+            patch("app.services.embeddings.generate_embedding") as mock_embed,
+        ):
             mock_ocr.return_value = mock_ocr_result
             mock_check.return_value = False
             mock_embed.return_value = [0.1] * 384
@@ -113,10 +118,15 @@ class TestInboxProcessing:
         mock_ocr_result.page_count = 1
         mock_ocr_result.error = None
 
-        with patch("app.services.watcher.extract_text_from_file", new_callable=AsyncMock) as mock_ocr, \
-             patch("app.services.extraction.check_ollama_available", new_callable=AsyncMock) as mock_check, \
-             patch("app.services.embeddings.generate_embedding") as mock_embed:
-
+        with (
+            patch(
+                "app.services.watcher.extract_text_from_file", new_callable=AsyncMock
+            ) as mock_ocr,
+            patch(
+                "app.services.extraction.check_ollama_available", new_callable=AsyncMock
+            ) as mock_check,
+            patch("app.services.embeddings.generate_embedding") as mock_embed,
+        ):
             mock_ocr.return_value = mock_ocr_result
             mock_check.return_value = False
             mock_embed.return_value = [0.1] * 384
@@ -135,7 +145,7 @@ class TestDuplicateDetection:
     @pytest.mark.asyncio
     async def test_duplicate_file_detected_by_hash(self, test_db, test_settings):
         """Duplicate file is detected by content hash."""
-        from app.services.watcher import process_document, get_file_hash
+        from app.services.watcher import process_document
 
         # Create and process first file
         file1 = test_settings.inbox_dir / "original.pdf"
@@ -147,10 +157,15 @@ class TestDuplicateDetection:
         mock_ocr_result.page_count = 1
         mock_ocr_result.error = None
 
-        with patch("app.services.watcher.extract_text_from_file", new_callable=AsyncMock) as mock_ocr, \
-             patch("app.services.extraction.check_ollama_available", new_callable=AsyncMock) as mock_check, \
-             patch("app.services.embeddings.generate_embedding") as mock_embed:
-
+        with (
+            patch(
+                "app.services.watcher.extract_text_from_file", new_callable=AsyncMock
+            ) as mock_ocr,
+            patch(
+                "app.services.extraction.check_ollama_available", new_callable=AsyncMock
+            ) as mock_check,
+            patch("app.services.embeddings.generate_embedding") as mock_embed,
+        ):
             mock_ocr.return_value = mock_ocr_result
             mock_check.return_value = False
             mock_embed.return_value = [0.1] * 384
@@ -177,7 +192,6 @@ class TestInboxHandler:
     async def test_handler_on_created_processes_file(self, test_db, test_settings):
         """InboxHandler.on_created processes new files."""
         from app.services.watcher import InboxHandler
-        import asyncio
 
         loop = asyncio.get_event_loop()
         handler = InboxHandler(loop)
@@ -197,10 +211,15 @@ class TestInboxHandler:
         mock_event.src_path = str(test_file)
         mock_event.is_directory = False
 
-        with patch("app.services.watcher.extract_text_from_file", new_callable=AsyncMock) as mock_ocr, \
-             patch("app.services.extraction.check_ollama_available", new_callable=AsyncMock) as mock_check, \
-             patch("app.services.embeddings.generate_embedding") as mock_embed:
-
+        with (
+            patch(
+                "app.services.watcher.extract_text_from_file", new_callable=AsyncMock
+            ) as mock_ocr,
+            patch(
+                "app.services.extraction.check_ollama_available", new_callable=AsyncMock
+            ) as mock_check,
+            patch("app.services.embeddings.generate_embedding") as mock_embed,
+        ):
             mock_ocr.return_value = mock_ocr_result
             mock_check.return_value = False
             mock_embed.return_value = [0.1] * 384
@@ -214,10 +233,9 @@ class TestInboxHandler:
             # Verify document was created
             async with aiosqlite.connect(test_db) as db:
                 cursor = await db.execute(
-                    "SELECT COUNT(*) FROM documents WHERE filename = ?",
-                    ("handler_test.pdf",)
+                    "SELECT COUNT(*) FROM documents WHERE filename = ?", ("handler_test.pdf",)
                 )
-                count = (await cursor.fetchone())[0]
+                (await cursor.fetchone())[0]
                 # May or may not have processed depending on timing
                 # The key is that it didn't crash
 
@@ -225,7 +243,6 @@ class TestInboxHandler:
     async def test_handler_ignores_temp_files(self, test_db, test_settings):
         """InboxHandler ignores temporary files."""
         from app.services.watcher import InboxHandler
-        import asyncio
 
         loop = asyncio.get_event_loop()
         handler = InboxHandler(loop)
@@ -238,7 +255,7 @@ class TestInboxHandler:
         mock_event.src_path = str(test_file)
         mock_event.is_directory = False
 
-        with patch("app.services.watcher.process_document", new_callable=AsyncMock) as mock_process:
+        with patch("app.services.watcher.process_document", new_callable=AsyncMock):
             handler.on_created(mock_event)
             await asyncio.sleep(0.1)
 

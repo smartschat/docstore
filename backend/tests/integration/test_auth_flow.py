@@ -1,10 +1,9 @@
 """Integration tests for authentication flow."""
 
-import pytest
 from datetime import datetime, timedelta
-from unittest.mock import patch
 
 import aiosqlite
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -13,10 +12,7 @@ class TestLoginFlow:
 
     def test_login_creates_session_and_sets_cookie(self, client):
         """Login with correct password creates session and sets cookie."""
-        response = client.post(
-            "/api/auth/login",
-            json={"password": "testpassword"}
-        )
+        response = client.post("/api/auth/login", json={"password": "testpassword"})
 
         assert response.status_code == 200
         assert response.json()["success"] is True
@@ -24,10 +20,7 @@ class TestLoginFlow:
 
     def test_login_invalid_password_returns_401(self, client):
         """Login with incorrect password returns 401."""
-        response = client.post(
-            "/api/auth/login",
-            json={"password": "wrongpassword"}
-        )
+        response = client.post("/api/auth/login", json={"password": "wrongpassword"})
 
         assert response.status_code == 401
         assert "session" not in response.cookies
@@ -35,10 +28,7 @@ class TestLoginFlow:
     def test_authenticated_user_can_access_protected_routes(self, client):
         """After login, user can access protected routes."""
         # Login first
-        login_response = client.post(
-            "/api/auth/login",
-            json={"password": "testpassword"}
-        )
+        login_response = client.post("/api/auth/login", json={"password": "testpassword"})
         assert login_response.status_code == 200
 
         # Access protected route
@@ -54,10 +44,7 @@ class TestLogoutFlow:
     def test_logout_clears_session_and_cookie(self, client):
         """Logout clears session and cookie."""
         # Login first
-        login_response = client.post(
-            "/api/auth/login",
-            json={"password": "testpassword"}
-        )
+        login_response = client.post("/api/auth/login", json={"password": "testpassword"})
         assert login_response.status_code == 200
 
         # Logout
@@ -68,10 +55,7 @@ class TestLogoutFlow:
     def test_after_logout_cannot_access_protected_routes(self, client, test_db):
         """After logout, user cannot access protected routes with old token."""
         # Login first
-        login_response = client.post(
-            "/api/auth/login",
-            json={"password": "testpassword"}
-        )
+        login_response = client.post("/api/auth/login", json={"password": "testpassword"})
         assert login_response.status_code == 200
         session_token = login_response.cookies.get("session")
 
@@ -81,6 +65,7 @@ class TestLogoutFlow:
 
         # Try to access protected route with new client (no cookies)
         from app.main import app
+
         with TestClient(app, raise_server_exceptions=False) as new_client:
             # Use the old session token
             new_client.cookies.set("session", session_token)
@@ -117,7 +102,7 @@ class TestSessionValidation:
         async with aiosqlite.connect(test_db) as db:
             await db.execute(
                 "INSERT INTO sessions (token, expires_at) VALUES (?, ?)",
-                (expired_token, expired_time.isoformat())
+                (expired_token, expired_time.isoformat()),
             )
             await db.commit()
 

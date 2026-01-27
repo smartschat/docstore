@@ -4,7 +4,6 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from app.services.queue import (
     get_pending_extractions,
     get_queue_stats,
@@ -33,11 +32,22 @@ class TestGetPendingExtractions:
         """Respects the limit parameter."""
         # Add more pending documents with all required fields
         for i in range(5):
-            await db_connection.execute("""
+            await db_connection.execute(
+                """
                 INSERT INTO documents (id, filename, file_path, file_hash, file_size, mime_type,
                                       raw_text, status, extraction_status, created_at)
-                VALUES (?, ?, ?, ?, 1024, 'application/pdf', ?, 'processing', 'pending', datetime('now', ? || ' seconds'))
-            """, (f"pending-{i}", f"file{i}.pdf", f"archive/file{i}.pdf", f"hash{i}", f"text {i}", -i))
+                VALUES (?, ?, ?, ?, 1024, 'application/pdf', ?, 'processing', 'pending',
+                        datetime('now', ? || ' seconds'))
+            """,
+                (
+                    f"pending-{i}",
+                    f"file{i}.pdf",
+                    f"archive/file{i}.pdf",
+                    f"hash{i}",
+                    f"text {i}",
+                    -i,
+                ),
+            )
         await db_connection.commit()
 
         result = await get_pending_extractions(limit=3)
@@ -59,12 +69,15 @@ class TestGetPendingExtractions:
         older_dt = datetime.fromisoformat(older_time)
         newer_dt = older_dt + timedelta(hours=1)
 
-        await db_connection.execute("""
+        await db_connection.execute(
+            """
             INSERT INTO documents (id, filename, file_path, file_hash, file_size, mime_type,
                                   raw_text, status, extraction_status, created_at)
             VALUES ('newer', 'newer.pdf', 'archive/newer.pdf', 'hashnewer', 1024, 'application/pdf',
                     'newer text', 'processing', 'pending', ?)
-        """, (newer_dt.isoformat(),))
+        """,
+            (newer_dt.isoformat(),),
+        )
         await db_connection.commit()
 
         result = await get_pending_extractions(limit=10)
@@ -80,8 +93,8 @@ class TestGetPendingExtractions:
         await db_connection.execute("""
             INSERT INTO documents (id, filename, file_path, file_hash, file_size, mime_type,
                                   raw_text, status, extraction_status, created_at)
-            VALUES ('no-text', 'notext.pdf', 'archive/notext.pdf', 'hashnotext', 1024, 'application/pdf',
-                    NULL, 'processing', 'pending', datetime('now'))
+            VALUES ('no-text', 'notext.pdf', 'archive/notext.pdf', 'hashnotext', 1024,
+                    'application/pdf', NULL, 'processing', 'pending', datetime('now'))
         """)
         await db_connection.commit()
 
@@ -128,10 +141,17 @@ class TestProcessPendingExtraction:
             "category": "invoice",
         }
 
-        with patch("app.services.queue.process_document_extraction", new=AsyncMock(return_value=mock_result)):
-            with patch("app.services.queue.update_document_extraction", new=AsyncMock()) as mock_update_ext:
-                with patch("app.services.queue.update_extraction_status", new=AsyncMock()) as mock_update_status:
-                    with patch("app.services.queue.update_document_status", new=AsyncMock()) as mock_update_doc:
+        with patch(
+            "app.services.queue.process_document_extraction",
+            new=AsyncMock(return_value=mock_result),
+        ):
+            with patch(
+                "app.services.queue.update_document_extraction", new=AsyncMock()
+            ) as mock_update_ext:
+                with patch(
+                    "app.services.queue.update_extraction_status", new=AsyncMock()
+                ) as mock_update_status:
+                    with patch("app.services.queue.update_document_status", new=AsyncMock()):
                         result = await process_pending_extraction(doc)
 
         assert result is True
@@ -143,7 +163,10 @@ class TestProcessPendingExtraction:
         """Handles extraction errors gracefully."""
         doc = {"id": "doc-003", "raw_text": "Some document text"}
 
-        with patch("app.services.queue.process_document_extraction", new=AsyncMock(side_effect=Exception("Error"))):
+        with patch(
+            "app.services.queue.process_document_extraction",
+            new=AsyncMock(side_effect=Exception("Error")),
+        ):
             result = await process_pending_extraction(doc)
 
         assert result is False
@@ -165,7 +188,9 @@ class TestQueueProcessorLoop:
             queue_module._should_stop = True
 
         with patch("app.services.queue.check_ollama_available", new=AsyncMock(return_value=True)):
-            with patch("app.services.queue.get_pending_extractions", new=AsyncMock(return_value=[])) as mock_get:
+            with patch(
+                "app.services.queue.get_pending_extractions", new=AsyncMock(return_value=[])
+            ) as mock_get:
                 # Run loop with very short interval
                 task = asyncio.create_task(queue_processor_loop(interval=1))
                 stop_task = asyncio.create_task(set_stop_after_delay())

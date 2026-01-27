@@ -1,12 +1,10 @@
 """Unit tests for extraction service."""
 
 import json
-from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-
 from app.services.extraction import (
     call_ollama,
     check_ollama_available,
@@ -174,9 +172,7 @@ class TestCallOllama:
         """Thinking blocks are stripped from response."""
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "response": "<think>reasoning</think>Final answer"
-        }
+        mock_response.json.return_value = {"response": "<think>reasoning</think>Final answer"}
         mock_response.raise_for_status = MagicMock()
 
         with patch("app.services.extraction.httpx.AsyncClient") as mock_client:
@@ -209,11 +205,9 @@ class TestExtractMetadata:
     @pytest.mark.asyncio
     async def test_extracts_valid_metadata(self):
         """Valid metadata is extracted correctly."""
-        mock_json = json.dumps({
-            "counterparty": "Test Company",
-            "category": "invoice",
-            "document_date": "2024-01-15"
-        })
+        mock_json = json.dumps(
+            {"counterparty": "Test Company", "category": "invoice", "document_date": "2024-01-15"}
+        )
 
         with patch("app.services.extraction.call_ollama", new=AsyncMock(return_value=mock_json)):
             result = await extract_metadata("Some document text")
@@ -224,10 +218,7 @@ class TestExtractMetadata:
     @pytest.mark.asyncio
     async def test_handles_invalid_date_format(self):
         """Invalid date format results in None."""
-        mock_json = json.dumps({
-            "counterparty": "Test Company",
-            "document_date": "invalid-date"
-        })
+        mock_json = json.dumps({"counterparty": "Test Company", "document_date": "invalid-date"})
 
         with patch("app.services.extraction.call_ollama", new=AsyncMock(return_value=mock_json)):
             result = await extract_metadata("Some document text")
@@ -259,7 +250,9 @@ class TestGenerateTitle:
     @pytest.mark.asyncio
     async def test_generates_valid_title(self):
         """Valid title is generated."""
-        with patch("app.services.extraction.call_ollama", new=AsyncMock(return_value="Electric Bill")):
+        with patch(
+            "app.services.extraction.call_ollama", new=AsyncMock(return_value="Electric Bill")
+        ):
             result = await generate_title("Summary of electric bill document")
             assert result == "Electric Bill"
 
@@ -281,21 +274,27 @@ class TestGenerateTitle:
     @pytest.mark.asyncio
     async def test_strips_quotes_from_title(self):
         """Quotes are stripped from generated title."""
-        with patch("app.services.extraction.call_ollama", new=AsyncMock(return_value='"Electric Bill"')):
+        with patch(
+            "app.services.extraction.call_ollama", new=AsyncMock(return_value='"Electric Bill"')
+        ):
             result = await generate_title("Summary")
             assert result == "Electric Bill"
 
     @pytest.mark.asyncio
     async def test_takes_first_line_only(self):
         """Multi-line response uses first line only."""
-        with patch("app.services.extraction.call_ollama", new=AsyncMock(return_value="Title\nExtra line")):
+        with patch(
+            "app.services.extraction.call_ollama", new=AsyncMock(return_value="Title\nExtra line")
+        ):
             result = await generate_title("Summary")
             assert result == "Title"
 
     @pytest.mark.asyncio
     async def test_handles_exception(self):
         """Exception returns None."""
-        with patch("app.services.extraction.call_ollama", new=AsyncMock(side_effect=Exception("Error"))):
+        with patch(
+            "app.services.extraction.call_ollama", new=AsyncMock(side_effect=Exception("Error"))
+        ):
             result = await generate_title("Summary")
             assert result is None
 
@@ -306,7 +305,9 @@ class TestGenerateSummary:
     @pytest.mark.asyncio
     async def test_generates_summary(self):
         """Summary is generated successfully."""
-        with patch("app.services.extraction.call_ollama", new=AsyncMock(return_value="This is a summary.")):
+        with patch(
+            "app.services.extraction.call_ollama", new=AsyncMock(return_value="This is a summary.")
+        ):
             result = await generate_summary("Document text here")
             assert result == "This is a summary."
 
@@ -320,7 +321,9 @@ class TestGenerateSummary:
     @pytest.mark.asyncio
     async def test_handles_exception(self):
         """Exception returns None."""
-        with patch("app.services.extraction.call_ollama", new=AsyncMock(side_effect=Exception("Error"))):
+        with patch(
+            "app.services.extraction.call_ollama", new=AsyncMock(side_effect=Exception("Error"))
+        ):
             result = await generate_summary("Document text")
             assert result is None
 
@@ -332,8 +335,13 @@ class TestGetEmptyExtraction:
         """Returns dict with all expected keys set to None."""
         result = get_empty_extraction()
         expected_keys = [
-            "title", "counterparty", "affected_person",
-            "category", "reference", "document_date", "summary"
+            "title",
+            "counterparty",
+            "affected_person",
+            "category",
+            "reference",
+            "document_date",
+            "summary",
         ]
         for key in expected_keys:
             assert key in result
@@ -352,7 +360,9 @@ class TestExtractDocumentData:
     @pytest.mark.asyncio
     async def test_returns_empty_when_ollama_unavailable(self):
         """Returns empty extraction when Ollama is not available."""
-        with patch("app.services.extraction.check_ollama_available", new=AsyncMock(return_value=False)):
+        with patch(
+            "app.services.extraction.check_ollama_available", new=AsyncMock(return_value=False)
+        ):
             result = await extract_document_data("Document text")
             assert result["title"] is None
             assert result["counterparty"] is None
@@ -360,11 +370,9 @@ class TestExtractDocumentData:
     @pytest.mark.asyncio
     async def test_full_extraction_pipeline(self):
         """Full extraction pipeline works correctly."""
-        mock_metadata = json.dumps({
-            "counterparty": "Test Corp",
-            "category": "invoice",
-            "document_date": "2024-01-15"
-        })
+        mock_metadata = json.dumps(
+            {"counterparty": "Test Corp", "category": "invoice", "document_date": "2024-01-15"}
+        )
 
         async def mock_call_ollama(prompt):
             if "Extract these fields" in prompt:
@@ -375,7 +383,9 @@ class TestExtractDocumentData:
                 return "This is a test invoice."
             return ""
 
-        with patch("app.services.extraction.check_ollama_available", new=AsyncMock(return_value=True)):
+        with patch(
+            "app.services.extraction.check_ollama_available", new=AsyncMock(return_value=True)
+        ):
             with patch("app.services.extraction.call_ollama", side_effect=mock_call_ollama):
                 result = await extract_document_data("Invoice text here")
 

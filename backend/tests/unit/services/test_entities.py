@@ -1,8 +1,6 @@
 """Tests for entity management service."""
 
 import pytest
-import pytest_asyncio
-
 from app.models import DisambiguationStatus
 from app.services import entities
 
@@ -95,9 +93,7 @@ class TestCounterpartyOperations:
     async def test_merge_counterparties(self, test_db):
         """Test merging two counterparties."""
         keep_id = await entities.create_counterparty("Main Corp", aliases=["MC"])
-        merge_id = await entities.create_counterparty(
-            "Subsidiary", aliases=["Sub", "S Corp"]
-        )
+        merge_id = await entities.create_counterparty("Subsidiary", aliases=["Sub", "S Corp"])
 
         result = await entities.merge_counterparties(keep_id, merge_id)
 
@@ -175,9 +171,7 @@ class TestDocumentPersonLinking:
         """Test linking a person to a document."""
         person_id = await entities.create_person("Test Person")
 
-        success = await entities.link_person_to_document(
-            "doc-001", person_id, role="affected"
-        )
+        success = await entities.link_person_to_document("doc-001", person_id, role="affected")
         assert success is True
 
         # Verify link
@@ -217,9 +211,7 @@ class TestDisambiguation:
     @pytest.mark.asyncio
     async def test_exact_match_counterparty(self, test_db):
         """Test exact alias match returns AUTO_MATCHED."""
-        await entities.create_counterparty(
-            "Deutsche Telekom AG", aliases=["Telekom", "T-Kom"]
-        )
+        await entities.create_counterparty("Deutsche Telekom AG", aliases=["Telekom", "T-Kom"])
 
         result = await entities.find_counterparty_by_name("Telekom")
 
@@ -267,10 +259,10 @@ class TestDisambiguation:
         settings = get_settings()
 
         # Create entities
-        cp_id = await entities.create_counterparty(
+        await entities.create_counterparty(
             "Power Company Inc", aliases=["Power Company", "Power Co"]
         )
-        person_id = await entities.create_person("John Smith")
+        await entities.create_person("John Smith")
 
         # Update document with matching values
         async with aiosqlite.connect(settings.database_path) as db:

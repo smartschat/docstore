@@ -1,11 +1,9 @@
 """Unit tests for authentication service."""
 
 from datetime import datetime, timedelta
-from unittest.mock import patch
 
 import aiosqlite
 import pytest
-
 from app.auth import (
     cleanup_expired_sessions,
     create_session,
@@ -64,7 +62,8 @@ class TestGenerateSessionToken:
         token = generate_session_token()
         # URL-safe base64 uses only alphanumeric, hyphen, underscore
         import re
-        assert re.match(r'^[A-Za-z0-9_-]+$', token)
+
+        assert re.match(r"^[A-Za-z0-9_-]+$", token)
 
 
 class TestCreateSession:
@@ -77,10 +76,7 @@ class TestCreateSession:
         await create_session(token)
 
         async with aiosqlite.connect(test_db) as db:
-            cursor = await db.execute(
-                "SELECT token FROM sessions WHERE token = ?",
-                (token,)
-            )
+            cursor = await db.execute("SELECT token FROM sessions WHERE token = ?", (token,))
             row = await cursor.fetchone()
             assert row is not None
             assert row[0] == token
@@ -92,10 +88,7 @@ class TestCreateSession:
         await create_session(token)
 
         async with aiosqlite.connect(test_db) as db:
-            cursor = await db.execute(
-                "SELECT expires_at FROM sessions WHERE token = ?",
-                (token,)
-            )
+            cursor = await db.execute("SELECT expires_at FROM sessions WHERE token = ?", (token,))
             row = await cursor.fetchone()
             expires_at = datetime.fromisoformat(row[0])
 
@@ -133,7 +126,7 @@ class TestValidateSession:
         async with aiosqlite.connect(test_db) as db:
             await db.execute(
                 "INSERT INTO sessions (token, expires_at) VALUES (?, ?)",
-                (token, expired_time.isoformat())
+                (token, expired_time.isoformat()),
             )
             await db.commit()
 
@@ -150,7 +143,7 @@ class TestValidateSession:
         async with aiosqlite.connect(test_db) as db:
             await db.execute(
                 "INSERT INTO sessions (token, expires_at) VALUES (?, ?)",
-                (token, expired_time.isoformat())
+                (token, expired_time.isoformat()),
             )
             await db.commit()
 
@@ -158,10 +151,7 @@ class TestValidateSession:
 
         # Session should be deleted
         async with aiosqlite.connect(test_db) as db:
-            cursor = await db.execute(
-                "SELECT token FROM sessions WHERE token = ?",
-                (token,)
-            )
+            cursor = await db.execute("SELECT token FROM sessions WHERE token = ?", (token,))
             row = await cursor.fetchone()
             assert row is None
 
@@ -190,10 +180,7 @@ class TestDeleteSession:
         await delete_session(token)
 
         async with aiosqlite.connect(test_db) as db:
-            cursor = await db.execute(
-                "SELECT token FROM sessions WHERE token = ?",
-                (token,)
-            )
+            cursor = await db.execute("SELECT token FROM sessions WHERE token = ?", (token,))
             row = await cursor.fetchone()
             assert row is None
 
@@ -215,11 +202,11 @@ class TestCleanupExpiredSessions:
         async with aiosqlite.connect(test_db) as db:
             await db.execute(
                 "INSERT INTO sessions (token, expires_at) VALUES (?, ?)",
-                ("expired-1", expired_time.isoformat())
+                ("expired-1", expired_time.isoformat()),
             )
             await db.execute(
                 "INSERT INTO sessions (token, expires_at) VALUES (?, ?)",
-                ("expired-2", expired_time.isoformat())
+                ("expired-2", expired_time.isoformat()),
             )
             await db.commit()
 
@@ -240,11 +227,11 @@ class TestCleanupExpiredSessions:
         async with aiosqlite.connect(test_db) as db:
             await db.execute(
                 "INSERT INTO sessions (token, expires_at) VALUES (?, ?)",
-                ("valid-token", valid_time.isoformat())
+                ("valid-token", valid_time.isoformat()),
             )
             await db.execute(
                 "INSERT INTO sessions (token, expires_at) VALUES (?, ?)",
-                ("expired-token", expired_time.isoformat())
+                ("expired-token", expired_time.isoformat()),
             )
             await db.commit()
 

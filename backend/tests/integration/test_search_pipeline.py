@@ -1,10 +1,8 @@
 """Integration tests for search pipeline."""
 
-import pytest
-from unittest.mock import patch, AsyncMock
-import numpy as np
+from unittest.mock import patch
 
-import aiosqlite
+import pytest
 
 
 @pytest.fixture
@@ -28,16 +26,10 @@ class TestKeywordSearch:
     """Test keyword search via FTS5."""
 
     @pytest.mark.asyncio
-    async def test_keyword_search_returns_fts_matches(
-        self, authenticated_client, seeded_db
-    ):
+    async def test_keyword_search_returns_fts_matches(self, authenticated_client, seeded_db):
         """Keyword search returns documents matching FTS5 query."""
         response = authenticated_client.post(
-            "/api/search",
-            json={
-                "query": "Power Company",
-                "search_type": "keyword"
-            }
+            "/api/search", json={"query": "Power Company", "search_type": "keyword"}
         )
 
         assert response.status_code == 200
@@ -48,17 +40,11 @@ class TestKeywordSearch:
         assert "doc-001" in doc_ids
 
     @pytest.mark.asyncio
-    async def test_keyword_search_with_category_filter(
-        self, authenticated_client, seeded_db
-    ):
+    async def test_keyword_search_with_category_filter(self, authenticated_client, seeded_db):
         """Keyword search respects category filter."""
         response = authenticated_client.post(
             "/api/search",
-            json={
-                "query": "Policy",
-                "search_type": "keyword",
-                "category": "insurance"
-            }
+            json={"query": "Policy", "search_type": "keyword", "category": "insurance"},
         )
 
         assert response.status_code == 200
@@ -68,33 +54,21 @@ class TestKeywordSearch:
             assert result["document"]["category"] == "insurance"
 
     @pytest.mark.asyncio
-    async def test_keyword_search_escapes_special_characters(
-        self, authenticated_client, seeded_db
-    ):
+    async def test_keyword_search_escapes_special_characters(self, authenticated_client, seeded_db):
         """Keyword search handles special characters safely."""
         # FTS5 special characters should be handled
         response = authenticated_client.post(
-            "/api/search",
-            json={
-                "query": "test OR DROP TABLE",
-                "search_type": "keyword"
-            }
+            "/api/search", json={"query": "test OR DROP TABLE", "search_type": "keyword"}
         )
 
         # Should not crash
         assert response.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_keyword_search_no_results_returns_empty(
-        self, authenticated_client, seeded_db
-    ):
+    async def test_keyword_search_no_results_returns_empty(self, authenticated_client, seeded_db):
         """Keyword search with no matches returns empty results."""
         response = authenticated_client.post(
-            "/api/search",
-            json={
-                "query": "xyznonexistentterm123",
-                "search_type": "keyword"
-            }
+            "/api/search", json={"query": "xyznonexistentterm123", "search_type": "keyword"}
         )
 
         assert response.status_code == 200
@@ -115,11 +89,7 @@ class TestSemanticSearch:
             mock_embed.return_value = [0.1] * 192 + [0.9] * 192
 
             response = authenticated_client.post(
-                "/api/search",
-                json={
-                    "query": "electric bill payment",
-                    "search_type": "semantic"
-                }
+                "/api/search", json={"query": "electric bill payment", "search_type": "semantic"}
             )
 
             assert response.status_code == 200
@@ -136,11 +106,7 @@ class TestSemanticSearch:
 
             response = authenticated_client.post(
                 "/api/search",
-                json={
-                    "query": "document",
-                    "search_type": "semantic",
-                    "category": "utilities"
-                }
+                json={"query": "document", "search_type": "semantic", "category": "utilities"},
             )
 
             assert response.status_code == 200
@@ -161,11 +127,7 @@ class TestHybridSearch:
             mock_embed.return_value = [0.1] * 192 + [0.9] * 192
 
             response = authenticated_client.post(
-                "/api/search",
-                json={
-                    "query": "Power Company",
-                    "search_type": "hybrid"
-                }
+                "/api/search", json={"query": "Power Company", "search_type": "hybrid"}
             )
 
             assert response.status_code == 200
@@ -186,11 +148,7 @@ class TestHybridSearch:
             mock_embed.return_value = [0.0] * 384
 
             response = authenticated_client.post(
-                "/api/search",
-                json={
-                    "query": "Insurance Policy",
-                    "search_type": "hybrid"
-                }
+                "/api/search", json={"query": "Insurance Policy", "search_type": "hybrid"}
             )
 
             assert response.status_code == 200
@@ -204,9 +162,7 @@ class TestSearchSuggestions:
     """Test search autocomplete suggestions."""
 
     @pytest.mark.asyncio
-    async def test_suggestions_returns_matching_data(
-        self, authenticated_client, seeded_db
-    ):
+    async def test_suggestions_returns_matching_data(self, authenticated_client, seeded_db):
         """Suggestions return matching filenames, tags, and counterparties."""
         response = authenticated_client.get("/api/search/suggest?q=Power")
 
@@ -220,9 +176,7 @@ class TestSearchSuggestions:
         assert "Power Company Inc" in data["counterparties"]
 
     @pytest.mark.asyncio
-    async def test_suggestions_minimum_query_length(
-        self, authenticated_client, seeded_db
-    ):
+    async def test_suggestions_minimum_query_length(self, authenticated_client, seeded_db):
         """Suggestions require minimum query length."""
         response = authenticated_client.get("/api/search/suggest?q=P")
 

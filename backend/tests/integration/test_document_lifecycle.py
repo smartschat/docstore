@@ -1,18 +1,13 @@
 """Integration tests for document lifecycle (CRUD operations)."""
 
-import pytest
-from datetime import datetime
-import json
-
 import aiosqlite
+import pytest
 
 
 class TestDocumentCRUD:
     """Test document create, read, update, delete operations."""
 
-    def test_list_documents_returns_paginated_results(
-        self, authenticated_client, seeded_db
-    ):
+    def test_list_documents_returns_paginated_results(self, authenticated_client, seeded_db):
         """List documents returns paginated results."""
         response = authenticated_client.get("/api/documents?page=1&page_size=10")
 
@@ -25,9 +20,7 @@ class TestDocumentCRUD:
         assert data["page"] == 1
         assert data["page_size"] == 10
 
-    def test_list_documents_filter_by_category(
-        self, authenticated_client, seeded_db
-    ):
+    def test_list_documents_filter_by_category(self, authenticated_client, seeded_db):
         """List documents can filter by category."""
         response = authenticated_client.get("/api/documents?category=utilities")
 
@@ -36,9 +29,7 @@ class TestDocumentCRUD:
         for item in data["items"]:
             assert item["category"] == "utilities"
 
-    def test_list_documents_filter_by_status(
-        self, authenticated_client, seeded_db
-    ):
+    def test_list_documents_filter_by_status(self, authenticated_client, seeded_db):
         """List documents can filter by status."""
         response = authenticated_client.get("/api/documents?status=completed")
 
@@ -47,9 +38,7 @@ class TestDocumentCRUD:
         for item in data["items"]:
             assert item["status"] == "completed"
 
-    def test_get_document_by_id(
-        self, authenticated_client, seeded_db
-    ):
+    def test_get_document_by_id(self, authenticated_client, seeded_db):
         """Get single document by ID."""
         response = authenticated_client.get("/api/documents/doc-001")
 
@@ -59,24 +48,16 @@ class TestDocumentCRUD:
         assert data["filename"] == "invoice_2024.pdf"
         assert data["category"] == "utilities"
 
-    def test_get_nonexistent_document_returns_404(
-        self, authenticated_client, seeded_db
-    ):
+    def test_get_nonexistent_document_returns_404(self, authenticated_client, seeded_db):
         """Get non-existent document returns 404."""
         response = authenticated_client.get("/api/documents/nonexistent-id")
 
         assert response.status_code == 404
 
-    def test_update_document_metadata(
-        self, authenticated_client, seeded_db
-    ):
+    def test_update_document_metadata(self, authenticated_client, seeded_db):
         """Update document metadata."""
         response = authenticated_client.patch(
-            "/api/documents/doc-001",
-            json={
-                "title": "Updated Electric Bill",
-                "category": "banking"
-            }
+            "/api/documents/doc-001", json={"title": "Updated Electric Bill", "category": "banking"}
         )
 
         assert response.status_code == 200
@@ -95,7 +76,7 @@ class TestDocumentCRUD:
         async with aiosqlite.connect(seeded_db) as db:
             await db.execute(
                 "UPDATE documents SET file_path = ? WHERE id = ?",
-                ("archive/invoice_2024.pdf", doc_id)
+                ("archive/invoice_2024.pdf", doc_id),
             )
             await db.commit()
 
@@ -111,18 +92,13 @@ class TestDocumentCRUD:
 
         # Verify document removed from database
         async with aiosqlite.connect(seeded_db) as db:
-            cursor = await db.execute(
-                "SELECT * FROM documents WHERE id = ?",
-                (doc_id,)
-            )
+            cursor = await db.execute("SELECT * FROM documents WHERE id = ?", (doc_id,))
             assert await cursor.fetchone() is None
 
         # Verify file removed
         assert not file_path.exists()
 
-    def test_delete_nonexistent_document_returns_404(
-        self, authenticated_client, seeded_db
-    ):
+    def test_delete_nonexistent_document_returns_404(self, authenticated_client, seeded_db):
         """Delete non-existent document returns 404."""
         response = authenticated_client.delete("/api/documents/nonexistent-id")
 
@@ -133,15 +109,12 @@ class TestTagManagement:
     """Test document tag operations."""
 
     @pytest.mark.asyncio
-    async def test_add_tags_to_document(
-        self, authenticated_client, seeded_db
-    ):
+    async def test_add_tags_to_document(self, authenticated_client, seeded_db):
         """Add tags to a document."""
         doc_id = "doc-001"
 
         response = authenticated_client.post(
-            f"/api/documents/{doc_id}/tags",
-            json=["important", "reviewed"]
+            f"/api/documents/{doc_id}/tags", json=["important", "reviewed"]
         )
 
         assert response.status_code == 200
@@ -153,22 +126,15 @@ class TestTagManagement:
         assert "reviewed" in tags
 
     @pytest.mark.asyncio
-    async def test_remove_tag_from_document(
-        self, authenticated_client, seeded_db
-    ):
+    async def test_remove_tag_from_document(self, authenticated_client, seeded_db):
         """Remove tag from document."""
         doc_id = "doc-001"
 
         # First add a tag
-        authenticated_client.post(
-            f"/api/documents/{doc_id}/tags",
-            json=["to-remove"]
-        )
+        authenticated_client.post(f"/api/documents/{doc_id}/tags", json=["to-remove"])
 
         # Then remove it
-        response = authenticated_client.delete(
-            f"/api/documents/{doc_id}/tags/to-remove"
-        )
+        response = authenticated_client.delete(f"/api/documents/{doc_id}/tags/to-remove")
 
         assert response.status_code == 200
 
@@ -181,8 +147,7 @@ class TestTagManagement:
         """List all available tags."""
         # First add some tags and verify they were added
         add_response = authenticated_client.post(
-            "/api/documents/doc-001/tags",
-            json=["tag1", "tag2"]
+            "/api/documents/doc-001/tags", json=["tag1", "tag2"]
         )
         assert add_response.status_code == 200
 
@@ -199,9 +164,7 @@ class TestDocumentFileOperations:
     """Test document file operations."""
 
     @pytest.mark.asyncio
-    async def test_download_document_file(
-        self, authenticated_client, seeded_db, test_settings
-    ):
+    async def test_download_document_file(self, authenticated_client, seeded_db, test_settings):
         """Download document file."""
         doc_id = "doc-001"
 
@@ -209,7 +172,7 @@ class TestDocumentFileOperations:
         async with aiosqlite.connect(seeded_db) as db:
             await db.execute(
                 "UPDATE documents SET file_path = ? WHERE id = ?",
-                ("archive/invoice_2024.pdf", doc_id)
+                ("archive/invoice_2024.pdf", doc_id),
             )
             await db.commit()
 
@@ -224,9 +187,7 @@ class TestDocumentFileOperations:
         assert response.headers["content-type"] == "application/pdf"
 
     @pytest.mark.asyncio
-    async def test_download_missing_file_returns_404(
-        self, authenticated_client, seeded_db
-    ):
+    async def test_download_missing_file_returns_404(self, authenticated_client, seeded_db):
         """Download missing file returns 404."""
         # The seed data has a file_path that doesn't exist
         response = authenticated_client.get("/api/documents/doc-001/file")
@@ -244,7 +205,7 @@ class TestDocumentFileOperations:
         async with aiosqlite.connect(seeded_db) as db:
             await db.execute(
                 "UPDATE documents SET file_path = ? WHERE id = ?",
-                ("archive/invoice_2024.pdf", doc_id)
+                ("archive/invoice_2024.pdf", doc_id),
             )
             await db.commit()
 

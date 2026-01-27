@@ -254,13 +254,19 @@ async def init_database() -> None:
         columns = [row[1] for row in await cursor.fetchall()]
 
         if "counterparty_id" not in columns:
-            await db.execute("ALTER TABLE documents ADD COLUMN counterparty_id TEXT REFERENCES counterparties(id)")
+            await db.execute(
+                "ALTER TABLE documents ADD COLUMN counterparty_id TEXT REFERENCES counterparties(id)"
+            )
 
         if "counterparty_disambiguation" not in columns:
-            await db.execute("ALTER TABLE documents ADD COLUMN counterparty_disambiguation TEXT DEFAULT 'pending'")
+            await db.execute(
+                "ALTER TABLE documents ADD COLUMN counterparty_disambiguation TEXT DEFAULT 'pending'"
+            )
 
         if "persons_disambiguation" not in columns:
-            await db.execute("ALTER TABLE documents ADD COLUMN persons_disambiguation TEXT DEFAULT 'pending'")
+            await db.execute(
+                "ALTER TABLE documents ADD COLUMN persons_disambiguation TEXT DEFAULT 'pending'"
+            )
 
         await db.commit()
 

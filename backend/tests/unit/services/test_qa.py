@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-
 from app.services.qa import (
     answer_question,
     answer_with_ollama,
@@ -205,8 +204,12 @@ class TestAnswerQuestion:
     async def test_uses_semantic_search_for_context(self, seeded_db):
         """Uses semantic search to find relevant documents."""
         with patch("app.services.qa.check_ollama_available", new=AsyncMock(return_value=True)):
-            with patch("app.services.qa.semantic_search", new=AsyncMock(return_value=[("doc-001", 0.9)])) as mock_search:
-                with patch("app.services.qa.answer_with_ollama", new=AsyncMock(return_value="Answer")):
+            with patch(
+                "app.services.qa.semantic_search", new=AsyncMock(return_value=[("doc-001", 0.9)])
+            ) as mock_search:
+                with patch(
+                    "app.services.qa.answer_with_ollama", new=AsyncMock(return_value="Answer")
+                ):
                     result = await answer_question("Tell me about the electric bill")
 
         mock_search.assert_called_once()
@@ -217,7 +220,9 @@ class TestAnswerQuestion:
         """Uses provided document IDs instead of searching."""
         with patch("app.services.qa.check_ollama_available", new=AsyncMock(return_value=True)):
             with patch("app.services.qa.semantic_search", new=AsyncMock()) as mock_search:
-                with patch("app.services.qa.answer_with_ollama", new=AsyncMock(return_value="Answer")):
+                with patch(
+                    "app.services.qa.answer_with_ollama", new=AsyncMock(return_value="Answer")
+                ):
                     result = await answer_question("Question", doc_ids=["doc-002"])
 
         mock_search.assert_not_called()
@@ -236,14 +241,18 @@ class TestAnswerQuestion:
     @pytest.mark.asyncio
     async def test_respects_max_sources(self, seeded_db):
         """Respects max_sources parameter by passing limit to semantic_search."""
-        mock_search = AsyncMock(return_value=[
-            ("doc-001", 0.9),
-            ("doc-002", 0.8),
-        ])
+        mock_search = AsyncMock(
+            return_value=[
+                ("doc-001", 0.9),
+                ("doc-002", 0.8),
+            ]
+        )
 
         with patch("app.services.qa.check_ollama_available", new=AsyncMock(return_value=True)):
             with patch("app.services.qa.semantic_search", mock_search):
-                with patch("app.services.qa.answer_with_ollama", new=AsyncMock(return_value="Answer")):
+                with patch(
+                    "app.services.qa.answer_with_ollama", new=AsyncMock(return_value="Answer")
+                ):
                     result = await answer_question("Question", max_sources=2)
 
         # Verify semantic_search was called with correct limit
@@ -258,7 +267,9 @@ class TestGetDocumentQa:
     async def test_answers_about_specific_document(self, seeded_db):
         """Answers question about a specific document."""
         with patch("app.services.qa.check_ollama_available", new=AsyncMock(return_value=True)):
-            with patch("app.services.qa.answer_with_ollama", new=AsyncMock(return_value="The answer")):
+            with patch(
+                "app.services.qa.answer_with_ollama", new=AsyncMock(return_value="The answer")
+            ):
                 result = await get_document_qa("doc-001", "What is the amount?")
 
         assert result["answer"] == "The answer"

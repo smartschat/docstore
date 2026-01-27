@@ -1,11 +1,9 @@
 """Unit tests for documents router."""
 
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import aiosqlite
 import pytest
-
 from app.models import DocumentStatus, Tag
 from app.routers.documents import (
     get_document_by_id,
@@ -55,7 +53,9 @@ class TestGetDocumentTags:
         """Returns tags for a document."""
         # Add a tag to doc-001
         await db_connection.execute("INSERT INTO tags (id, name) VALUES (1, 'important')")
-        await db_connection.execute("INSERT INTO document_tags (doc_id, tag_id) VALUES ('doc-001', 1)")
+        await db_connection.execute(
+            "INSERT INTO document_tags (doc_id, tag_id) VALUES ('doc-001', 1)"
+        )
         await db_connection.commit()
 
         result = await get_document_tags("doc-001")
@@ -207,9 +207,8 @@ class TestGetDocumentEndpoint:
     @pytest.mark.asyncio
     async def test_returns_404_for_nonexistent(self, seeded_db):
         """Returns 404 when document not found."""
-        from fastapi import HTTPException
-
         from app.routers.documents import get_document
+        from fastapi import HTTPException
 
         with patch("app.routers.documents.get_current_session", return_value="valid-session"):
             with pytest.raises(HTTPException) as exc_info:
@@ -257,10 +256,9 @@ class TestUpdateDocumentEndpoint:
     @pytest.mark.asyncio
     async def test_returns_404_for_nonexistent(self, seeded_db):
         """Returns 404 when document not found."""
-        from fastapi import HTTPException
-
         from app.models import DocumentUpdate
         from app.routers.documents import update_document
+        from fastapi import HTTPException
 
         update = DocumentUpdate(title="New Title")
 
@@ -287,7 +285,7 @@ class TestDeleteDocumentEndpoint:
         # Update document to point to real file
         await db_connection.execute(
             "UPDATE documents SET file_path = ? WHERE id = ?",
-            ("archive/invoice_2024.pdf", "doc-001")
+            ("archive/invoice_2024.pdf", "doc-001"),
         )
         await db_connection.commit()
 
@@ -297,18 +295,15 @@ class TestDeleteDocumentEndpoint:
         assert result["message"] == "Document deleted"
 
         # Verify deleted from database
-        cursor = await db_connection.execute(
-            "SELECT id FROM documents WHERE id = ?", ("doc-001",)
-        )
+        cursor = await db_connection.execute("SELECT id FROM documents WHERE id = ?", ("doc-001",))
         row = await cursor.fetchone()
         assert row is None
 
     @pytest.mark.asyncio
     async def test_returns_404_for_nonexistent(self, seeded_db):
         """Returns 404 when document not found."""
-        from fastapi import HTTPException
-
         from app.routers.documents import delete_document
+        from fastapi import HTTPException
 
         with patch("app.routers.documents.get_current_session", return_value="valid-session"):
             with pytest.raises(HTTPException) as exc_info:
@@ -331,11 +326,14 @@ class TestAddTagsEndpoint:
         assert result["message"] == "Tags added"
 
         # Verify tags in database
-        cursor = await db_connection.execute("""
+        cursor = await db_connection.execute(
+            """
             SELECT t.name FROM tags t
             JOIN document_tags dt ON dt.tag_id = t.id
             WHERE dt.doc_id = ?
-        """, ("doc-001",))
+        """,
+            ("doc-001",),
+        )
         rows = await cursor.fetchall()
         tag_names = [row["name"] for row in rows]
         assert "important" in tag_names
@@ -344,9 +342,8 @@ class TestAddTagsEndpoint:
     @pytest.mark.asyncio
     async def test_returns_404_for_nonexistent_document(self, seeded_db):
         """Returns 404 when document not found."""
-        from fastapi import HTTPException
-
         from app.routers.documents import add_tags
+        from fastapi import HTTPException
 
         with patch("app.routers.documents.get_current_session", return_value="valid-session"):
             with pytest.raises(HTTPException) as exc_info:
@@ -371,11 +368,14 @@ class TestRemoveTagEndpoint:
         assert result["message"] == "Tag removed"
 
         # Verify tag removed
-        cursor = await db_connection.execute("""
+        cursor = await db_connection.execute(
+            """
             SELECT t.name FROM tags t
             JOIN document_tags dt ON dt.tag_id = t.id
             WHERE dt.doc_id = ? AND t.name = ?
-        """, ("doc-001", "to-remove"))
+        """,
+            ("doc-001", "to-remove"),
+        )
         row = await cursor.fetchone()
         assert row is None
 
@@ -386,9 +386,8 @@ class TestDownloadFileEndpoint:
     @pytest.mark.asyncio
     async def test_returns_404_for_nonexistent_document(self, seeded_db):
         """Returns 404 when document not found."""
-        from fastapi import HTTPException
-
         from app.routers.documents import download_file
+        from fastapi import HTTPException
 
         with patch("app.routers.documents.get_current_session", return_value="valid-session"):
             with pytest.raises(HTTPException) as exc_info:
@@ -399,14 +398,12 @@ class TestDownloadFileEndpoint:
     @pytest.mark.asyncio
     async def test_returns_404_for_missing_file(self, seeded_db, db_connection, test_settings):
         """Returns 404 when file doesn't exist on disk."""
-        from fastapi import HTTPException
-
         from app.routers.documents import download_file
+        from fastapi import HTTPException
 
         # Update document to point to non-existent file
         await db_connection.execute(
-            "UPDATE documents SET file_path = ? WHERE id = ?",
-            ("archive/missing.pdf", "doc-001")
+            "UPDATE documents SET file_path = ? WHERE id = ?", ("archive/missing.pdf", "doc-001")
         )
         await db_connection.commit()
 

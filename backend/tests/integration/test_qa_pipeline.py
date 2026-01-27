@@ -1,10 +1,8 @@
 """Integration tests for Q&A (RAG) pipeline."""
 
-import pytest
-from unittest.mock import patch, AsyncMock
-import json
+from unittest.mock import AsyncMock, patch
 
-import aiosqlite
+import pytest
 
 
 @pytest.fixture
@@ -31,18 +29,20 @@ class TestQuestionAnswering:
         self, authenticated_client, seeded_db_with_embeddings
     ):
         """Question returns answer generated from relevant documents."""
-        with patch("app.services.embeddings.generate_embedding") as mock_embed, \
-             patch("app.services.qa.check_ollama_available", new_callable=AsyncMock) as mock_check, \
-             patch("app.services.qa.answer_with_ollama", new_callable=AsyncMock) as mock_ollama:
-
+        with (
+            patch("app.services.embeddings.generate_embedding") as mock_embed,
+            patch("app.services.qa.check_ollama_available", new_callable=AsyncMock) as mock_check,
+            patch("app.services.qa.answer_with_ollama", new_callable=AsyncMock) as mock_ollama,
+        ):
             # Return embedding similar to utilities doc
             mock_embed.return_value = [0.1] * 192 + [0.9] * 192
             mock_check.return_value = True
-            mock_ollama.return_value = "Your electric bill from Power Company Inc is $150.00 for January 2024."
+            mock_ollama.return_value = (
+                "Your electric bill from Power Company Inc is $150.00 for January 2024."
+            )
 
             response = authenticated_client.post(
-                "/api/ask",
-                json={"question": "What was my electric bill?"}
+                "/api/ask", json={"question": "What was my electric bill?"}
             )
 
             assert response.status_code == 200
@@ -56,18 +56,15 @@ class TestQuestionAnswering:
         self, authenticated_client, seeded_db_with_embeddings
     ):
         """Question can be scoped to specific documents."""
-        with patch("app.services.qa.check_ollama_available", new_callable=AsyncMock) as mock_check, \
-             patch("app.services.qa.answer_with_ollama", new_callable=AsyncMock) as mock_ollama:
-
+        with (
+            patch("app.services.qa.check_ollama_available", new_callable=AsyncMock) as mock_check,
+            patch("app.services.qa.answer_with_ollama", new_callable=AsyncMock) as mock_ollama,
+        ):
             mock_check.return_value = True
             mock_ollama.return_value = "Your insurance policy number is POL-12345."
 
             response = authenticated_client.post(
-                "/api/ask",
-                json={
-                    "question": "What is my policy number?",
-                    "doc_ids": ["doc-002"]
-                }
+                "/api/ask", json={"question": "What is my policy number?", "doc_ids": ["doc-002"]}
             )
 
             assert response.status_code == 200
@@ -82,18 +79,18 @@ class TestQuestionAnswering:
         self, authenticated_client, seeded_db_with_embeddings
     ):
         """Question with no relevant documents returns appropriate response."""
-        with patch("app.services.embeddings.generate_embedding") as mock_embed, \
-             patch("app.services.qa.check_ollama_available", new_callable=AsyncMock) as mock_check, \
-             patch("app.services.qa.answer_with_ollama", new_callable=AsyncMock) as mock_ollama:
-
+        with (
+            patch("app.services.embeddings.generate_embedding") as mock_embed,
+            patch("app.services.qa.check_ollama_available", new_callable=AsyncMock) as mock_check,
+            patch("app.services.qa.answer_with_ollama", new_callable=AsyncMock) as mock_ollama,
+        ):
             # Return embedding dissimilar to all docs
             mock_embed.return_value = [0.5] * 384
             mock_check.return_value = True
             mock_ollama.return_value = "I don't have enough information to answer that question."
 
             response = authenticated_client.post(
-                "/api/ask",
-                json={"question": "What is the weather today?"}
+                "/api/ask", json={"question": "What is the weather today?"}
             )
 
             assert response.status_code == 200
@@ -106,12 +103,10 @@ class TestQuestionAnswering:
     ):
         """Question when Ollama unavailable returns error."""
         with patch("app.services.qa.check_ollama_available", new_callable=AsyncMock) as mock_check:
-
             mock_check.return_value = False
 
             response = authenticated_client.post(
-                "/api/ask",
-                json={"question": "What is my electric bill?"}
+                "/api/ask", json={"question": "What is my electric bill?"}
             )
 
             # Should return 200 with error message in answer
@@ -124,11 +119,9 @@ class TestContextBuilding:
     """Test context building for RAG."""
 
     @pytest.mark.asyncio
-    async def test_context_includes_relevant_document_text(
-        self, seeded_db_with_embeddings
-    ):
+    async def test_context_includes_relevant_document_text(self, seeded_db_with_embeddings):
         """Context includes text from relevant documents."""
-        from app.services.qa import get_document_context, build_context_prompt
+        from app.services.qa import build_context_prompt, get_document_context
 
         # get_document_context takes doc_ids, not a question
         contexts = await get_document_context(["doc-001", "doc-002"])

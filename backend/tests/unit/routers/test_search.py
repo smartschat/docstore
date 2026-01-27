@@ -1,6 +1,5 @@
 """Unit tests for search router."""
 
-import json
 from unittest.mock import AsyncMock, patch
 
 import aiosqlite
@@ -154,11 +153,7 @@ class TestKeywordSearch:
             await db.commit()
 
         # Search with date range that excludes some docs
-        results = await keyword_search(
-            "Invoice",
-            date_from="2024-01-01",
-            date_to="2024-01-31"
-        )
+        results = await keyword_search("Invoice", date_from="2024-01-01", date_to="2024-01-31")
 
         # doc-001 is dated 2024-01-15, should be included
         doc_ids = [r[0] for r in results]
@@ -179,10 +174,10 @@ class TestHybridSearch:
             await db.commit()
 
         # Mock semantic search to avoid needing to insert into vec0 table
-        with patch("app.routers.search.semantic_search", new=AsyncMock(return_value=[
-            ("doc-002", 0.9),
-            ("doc-001", 0.7)
-        ])):
+        with patch(
+            "app.routers.search.semantic_search",
+            new=AsyncMock(return_value=[("doc-002", 0.9), ("doc-001", 0.7)]),
+        ):
             results = await hybrid_search("insurance policy")
 
             # Should have results from both searches
@@ -196,17 +191,14 @@ class TestHybridSearch:
         from app.routers.search import hybrid_search
 
         # Mock both search functions
-        with patch("app.routers.search.keyword_search", new=AsyncMock(return_value=[
-            ("doc-1", 10.0, "snippet")
-        ])):
-            with patch("app.routers.search.semantic_search", new=AsyncMock(return_value=[
-                ("doc-1", 0.9)
-            ])):
-                results = await hybrid_search(
-                    "test",
-                    keyword_weight=0.3,
-                    semantic_weight=0.7
-                )
+        with patch(
+            "app.routers.search.keyword_search",
+            new=AsyncMock(return_value=[("doc-1", 10.0, "snippet")]),
+        ):
+            with patch(
+                "app.routers.search.semantic_search", new=AsyncMock(return_value=[("doc-1", 0.9)])
+            ):
+                results = await hybrid_search("test", keyword_weight=0.3, semantic_weight=0.7)
 
                 # Both should be normalized to 1.0 since they're the only results
                 # Combined score = 0.3 * 1.0 + 0.7 * 1.0 = 1.0
@@ -219,9 +211,10 @@ class TestHybridSearch:
         """Handles documents only found via keyword search."""
         from app.routers.search import hybrid_search
 
-        with patch("app.routers.search.keyword_search", new=AsyncMock(return_value=[
-            ("doc-keyword", 5.0, "snippet")
-        ])):
+        with patch(
+            "app.routers.search.keyword_search",
+            new=AsyncMock(return_value=[("doc-keyword", 5.0, "snippet")]),
+        ):
             with patch("app.routers.search.semantic_search", new=AsyncMock(return_value=[])):
                 results = await hybrid_search("test")
 
@@ -236,9 +229,10 @@ class TestHybridSearch:
         from app.routers.search import hybrid_search
 
         with patch("app.routers.search.keyword_search", new=AsyncMock(return_value=[])):
-            with patch("app.routers.search.semantic_search", new=AsyncMock(return_value=[
-                ("doc-semantic", 0.8)
-            ])):
+            with patch(
+                "app.routers.search.semantic_search",
+                new=AsyncMock(return_value=[("doc-semantic", 0.8)]),
+            ):
                 results = await hybrid_search("test")
 
                 assert len(results) == 1
@@ -251,14 +245,19 @@ class TestHybridSearch:
         """Results are sorted by combined score descending."""
         from app.routers.search import hybrid_search
 
-        with patch("app.routers.search.keyword_search", new=AsyncMock(return_value=[
-            ("doc-1", 10.0, "s1"),
-            ("doc-2", 5.0, "s2")
-        ])):
-            with patch("app.routers.search.semantic_search", new=AsyncMock(return_value=[
-                ("doc-2", 1.0),  # Higher semantic score for doc-2
-                ("doc-1", 0.5)
-            ])):
+        with patch(
+            "app.routers.search.keyword_search",
+            new=AsyncMock(return_value=[("doc-1", 10.0, "s1"), ("doc-2", 5.0, "s2")]),
+        ):
+            with patch(
+                "app.routers.search.semantic_search",
+                new=AsyncMock(
+                    return_value=[
+                        ("doc-2", 1.0),  # Higher semantic score for doc-2
+                        ("doc-1", 0.5),
+                    ]
+                ),
+            ):
                 results = await hybrid_search("test")
 
                 assert len(results) == 2
@@ -272,11 +271,12 @@ class TestHybridSearch:
         """Limit parameter is respected."""
         from app.routers.search import hybrid_search
 
-        with patch("app.routers.search.keyword_search", new=AsyncMock(return_value=[
-            ("doc-1", 10.0, "s1"),
-            ("doc-2", 9.0, "s2"),
-            ("doc-3", 8.0, "s3")
-        ])):
+        with patch(
+            "app.routers.search.keyword_search",
+            new=AsyncMock(
+                return_value=[("doc-1", 10.0, "s1"), ("doc-2", 9.0, "s2"), ("doc-3", 8.0, "s3")]
+            ),
+        ):
             with patch("app.routers.search.semantic_search", new=AsyncMock(return_value=[])):
                 results = await hybrid_search("test", limit=2)
 
@@ -289,11 +289,9 @@ class TestSearchSuggestions:
     @pytest.mark.asyncio
     async def test_returns_matching_filenames(self, seeded_db):
         """Returns filenames matching query."""
-        from app.routers.search import search_suggestions
 
         # Mock the auth dependency
         with patch("app.routers.search.get_current_session", return_value="valid-token"):
-            from fastapi import Request
             mock_request = AsyncMock()
             mock_request.headers.get.return_value = None
 
@@ -301,8 +299,7 @@ class TestSearchSuggestions:
             # We need to test the database query logic
             async with aiosqlite.connect(seeded_db) as db:
                 cursor = await db.execute(
-                    "SELECT DISTINCT filename FROM documents WHERE filename LIKE ?",
-                    ("%invoice%",)
+                    "SELECT DISTINCT filename FROM documents WHERE filename LIKE ?", ("%invoice%",)
                 )
                 filenames = [row[0] for row in await cursor.fetchall()]
 
@@ -317,10 +314,7 @@ class TestSearchSuggestions:
             await db.execute("INSERT INTO tags (name) VALUES (?)", ("invoice-related",))
             await db.commit()
 
-            cursor = await db.execute(
-                "SELECT name FROM tags WHERE name LIKE ?",
-                ("%inv%",)
-            )
+            cursor = await db.execute("SELECT name FROM tags WHERE name LIKE ?", ("%inv%",))
             tags = [row[0] for row in await cursor.fetchall()]
 
         assert "invoice-related" in tags
@@ -331,7 +325,7 @@ class TestSearchSuggestions:
         async with aiosqlite.connect(seeded_db) as db:
             cursor = await db.execute(
                 "SELECT DISTINCT counterparty FROM documents WHERE counterparty LIKE ?",
-                ("%Power%",)
+                ("%Power%",),
             )
             counterparties = [row[0] for row in await cursor.fetchall() if row[0]]
 
@@ -343,8 +337,8 @@ class TestRowToDocument:
 
     def test_converts_row_to_document_model(self):
         """Database row is converted to Document model."""
+
         from app.routers.search import row_to_document
-        from datetime import datetime
 
         row = {
             "id": "doc-1",

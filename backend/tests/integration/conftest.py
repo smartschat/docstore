@@ -8,11 +8,13 @@ def reset_global_state():
     """Reset all global state in services to ensure test isolation."""
     # Reset queue processor state
     from app.services import queue
+
     queue._queue_task = None
     queue._should_stop = False
 
     # Reset folder watcher state
     from app.services.watcher import folder_watcher
+
     if folder_watcher._running:
         folder_watcher.stop()
     folder_watcher._running = False
@@ -20,6 +22,7 @@ def reset_global_state():
 
     # Reset embedding model state (optional, but good for isolation)
     from app.services import embeddings
+
     embeddings._model_loaded = False
     embeddings._tokenizer = None
     embeddings._session = None
@@ -44,9 +47,6 @@ def client(test_db):
 @pytest.fixture
 def authenticated_client(client):
     """Client with valid authentication."""
-    response = client.post(
-        "/api/auth/login",
-        json={"password": "testpassword"}
-    )
+    response = client.post("/api/auth/login", json={"password": "testpassword"})
     assert response.status_code == 200
     return client

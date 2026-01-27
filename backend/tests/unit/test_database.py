@@ -1,12 +1,9 @@
 """Unit tests for database module."""
 
-import sqlite3
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import aiosqlite
 import pytest
-
 from app.database import init_database, init_sqlite_vec
 
 
@@ -28,10 +25,25 @@ class TestInitDatabase:
             columns = {row[1] for row in await cursor.fetchall()}
 
             expected_columns = {
-                "id", "filename", "file_path", "file_hash", "file_size",
-                "mime_type", "raw_text", "page_count", "summary", "document_date",
-                "created_at", "processed_at", "status", "extraction_status",
-                "title", "counterparty", "affected_person", "category", "reference"
+                "id",
+                "filename",
+                "file_path",
+                "file_hash",
+                "file_size",
+                "mime_type",
+                "raw_text",
+                "page_count",
+                "summary",
+                "document_date",
+                "created_at",
+                "processed_at",
+                "status",
+                "extraction_status",
+                "title",
+                "counterparty",
+                "affected_person",
+                "category",
+                "reference",
             }
             assert expected_columns.issubset(columns)
 
@@ -89,9 +101,7 @@ class TestInitDatabase:
     async def test_creates_fts_triggers(self, test_db):
         """FTS sync triggers are created."""
         async with aiosqlite.connect(test_db) as db:
-            cursor = await db.execute(
-                "SELECT name FROM sqlite_master WHERE type='trigger'"
-            )
+            cursor = await db.execute("SELECT name FROM sqlite_master WHERE type='trigger'")
             triggers = {row[0] for row in await cursor.fetchall()}
 
             assert "documents_ai" in triggers  # After Insert
@@ -102,9 +112,7 @@ class TestInitDatabase:
     async def test_creates_indexes(self, test_db):
         """Required indexes are created."""
         async with aiosqlite.connect(test_db) as db:
-            cursor = await db.execute(
-                "SELECT name FROM sqlite_master WHERE type='index'"
-            )
+            cursor = await db.execute("SELECT name FROM sqlite_master WHERE type='index'")
             indexes = {row[0] for row in await cursor.fetchall()}
 
             assert "idx_documents_file_hash" in indexes
@@ -118,7 +126,8 @@ class TestInitDatabase:
             # Insert a document
             await db.execute("""
                 INSERT INTO documents (id, filename, file_path, file_hash, raw_text, status)
-                VALUES ('test-1', 'test.pdf', '/path/test.pdf', 'hash123', 'searchable text content', 'completed')
+                VALUES ('test-1', 'test.pdf', '/path/test.pdf', 'hash123',
+                        'searchable text content', 'completed')
             """)
             await db.commit()
 
@@ -137,7 +146,8 @@ class TestInitDatabase:
             # Insert a document
             await db.execute("""
                 INSERT INTO documents (id, filename, file_path, file_hash, raw_text, status)
-                VALUES ('test-1', 'test.pdf', '/path/test.pdf', 'hash123', 'old content', 'completed')
+                VALUES ('test-1', 'test.pdf', '/path/test.pdf', 'hash123',
+                        'old content', 'completed')
             """)
             await db.commit()
 
@@ -168,7 +178,8 @@ class TestInitDatabase:
             # Insert a document
             await db.execute("""
                 INSERT INTO documents (id, filename, file_path, file_hash, raw_text, status)
-                VALUES ('test-1', 'test.pdf', '/path/test.pdf', 'hash123', 'deletable content', 'completed')
+                VALUES ('test-1', 'test.pdf', '/path/test.pdf', 'hash123',
+                        'deletable content', 'completed')
             """)
             await db.commit()
 
@@ -231,12 +242,13 @@ class TestMigration:
                 )
             """)
             await db.execute(
-                "INSERT INTO documents VALUES ('doc1', 'test.pdf', '/path/test.pdf', 'hash1', 'completed')"
+                """INSERT INTO documents VALUES
+                ('doc1', 'test.pdf', '/path/test.pdf', 'hash1', 'completed')"""
             )
             await db.commit()
 
         # Patch settings to use this db
-        with patch.object(test_settings, 'database_path', db_path):
+        with patch.object(test_settings, "database_path", db_path):
             await init_database()
 
         # Verify column was added and data preserved
@@ -260,9 +272,7 @@ class TestMigration:
 
         # Verify tables still exist
         async with aiosqlite.connect(test_db) as db:
-            cursor = await db.execute(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table'"
-            )
+            cursor = await db.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
             count = (await cursor.fetchone())[0]
             assert count > 0
 
@@ -286,9 +296,7 @@ class TestForeignKeys:
             await db.execute("INSERT INTO tags (id, name) VALUES (1, 'important')")
 
             # Link them
-            await db.execute(
-                "INSERT INTO document_tags (doc_id, tag_id) VALUES ('doc-1', 1)"
-            )
+            await db.execute("INSERT INTO document_tags (doc_id, tag_id) VALUES ('doc-1', 1)")
             await db.commit()
 
             # Delete document
@@ -296,8 +304,6 @@ class TestForeignKeys:
             await db.commit()
 
             # document_tags entry should be gone
-            cursor = await db.execute(
-                "SELECT COUNT(*) FROM document_tags WHERE doc_id = 'doc-1'"
-            )
+            cursor = await db.execute("SELECT COUNT(*) FROM document_tags WHERE doc_id = 'doc-1'")
             count = (await cursor.fetchone())[0]
             assert count == 0

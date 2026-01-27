@@ -1,12 +1,11 @@
 """Unit tests for watcher service."""
 
 import asyncio
-import hashlib
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
+from app.models import DocumentStatus
 from app.services.watcher import (
     FolderWatcher,
     InboxHandler,
@@ -16,12 +15,10 @@ from app.services.watcher import (
     get_mime_type,
     process_document,
     process_existing_inbox,
-    update_document_extraction,
     update_document_ocr,
     update_document_status,
     update_extraction_status,
 )
-from app.models import DocumentStatus
 
 
 class TestGetFileHash:
@@ -145,9 +142,7 @@ class TestCreateDocumentRecord:
             mime_type="application/pdf",
         )
 
-        cursor = await db_connection.execute(
-            "SELECT * FROM documents WHERE id = ?", ("test-123",)
-        )
+        cursor = await db_connection.execute("SELECT * FROM documents WHERE id = ?", ("test-123",))
         row = await cursor.fetchone()
 
         assert row is not None
@@ -354,6 +349,7 @@ class TestProcessDocument:
 
         with patch.object(test_settings, "max_file_size_mb", 0.00001):
             import app.services.watcher as watcher_module
+
             with patch.object(watcher_module, "settings", test_settings):
                 result = await process_document(pdf_file)
         assert result is None
@@ -385,7 +381,9 @@ class TestProcessExistingInbox:
         pdf_file = inbox / "test.pdf"
         pdf_file.write_bytes(b"%PDF-1.4")
 
-        with patch("app.services.watcher.process_document", new=AsyncMock(return_value="doc-id")) as mock_process:
+        with patch(
+            "app.services.watcher.process_document", new=AsyncMock(return_value="doc-id")
+        ) as mock_process:
             result = await process_existing_inbox()
 
             mock_process.assert_called_once()
@@ -406,7 +404,6 @@ class TestProcessExistingInbox:
     @pytest.mark.asyncio
     async def test_handles_nonexistent_inbox(self, test_settings):
         """Nonexistent inbox directory returns empty list."""
-        import app.services.watcher as watcher_module
 
         # Create a temp settings with non-existent inbox
         original_inbox = test_settings.inbox_dir

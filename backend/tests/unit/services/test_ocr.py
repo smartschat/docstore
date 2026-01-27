@@ -1,11 +1,8 @@
 """Unit tests for OCR service."""
 
-import asyncio
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from app.services.ocr import (
     OCRResult,
     extract_text_from_file,
@@ -90,7 +87,10 @@ class TestProcessPdf:
         with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_process)):
             with patch("app.services.ocr.get_pdf_page_count", new=AsyncMock(return_value=1)):
                 with patch("tempfile.NamedTemporaryFile", return_value=mock_tempfile):
-                    with patch("app.services.ocr.extract_text_with_pdftotext", new=AsyncMock(return_value="existing text")):
+                    with patch(
+                        "app.services.ocr.extract_text_with_pdftotext",
+                        new=AsyncMock(return_value="existing text"),
+                    ):
                         result = await process_pdf(sample_pdf)
 
         assert result.success is True
@@ -128,14 +128,26 @@ class TestProcessPdf:
         sidecar_content = "[OCR skipped on page(s) 1-3]"
 
         with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_process)):
-            with patch("builtins.open", MagicMock(return_value=MagicMock(
-                __enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value=sidecar_content))),
-                __exit__=MagicMock()
-            ))):
+            with patch(
+                "builtins.open",
+                MagicMock(
+                    return_value=MagicMock(
+                        __enter__=MagicMock(
+                            return_value=MagicMock(read=MagicMock(return_value=sidecar_content))
+                        ),
+                        __exit__=MagicMock(),
+                    )
+                ),
+            ):
                 with patch("pathlib.Path.unlink"):
-                    with patch("app.services.ocr.extract_text_with_pdftotext", new=AsyncMock(return_value="fallback text")) as mock_fallback:
-                        with patch("app.services.ocr.get_pdf_page_count", new=AsyncMock(return_value=3)):
-                            result = await process_pdf(sample_pdf)
+                    with patch(
+                        "app.services.ocr.extract_text_with_pdftotext",
+                        new=AsyncMock(return_value="fallback text"),
+                    ) as mock_fallback:
+                        with patch(
+                            "app.services.ocr.get_pdf_page_count", new=AsyncMock(return_value=3)
+                        ):
+                            await process_pdf(sample_pdf)
 
         mock_fallback.assert_called_once()
 
@@ -230,7 +242,9 @@ class TestGetPdfPageCount:
         """Uses pdfinfo to get page count."""
         mock_process = MagicMock()
         mock_process.returncode = 0
-        mock_process.communicate = AsyncMock(return_value=(b"Title: Test\nPages: 5\nSize: 100x100", b""))
+        mock_process.communicate = AsyncMock(
+            return_value=(b"Title: Test\nPages: 5\nSize: 100x100", b"")
+        )
 
         with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_process)):
             result = await get_pdf_page_count(sample_pdf)
@@ -277,7 +291,9 @@ class TestExtractTextFromFile:
         """PDF files are routed to process_pdf."""
         mock_result = OCRResult(text="PDF text", page_count=1, success=True)
 
-        with patch("app.services.ocr.process_pdf", new=AsyncMock(return_value=mock_result)) as mock_process:
+        with patch(
+            "app.services.ocr.process_pdf", new=AsyncMock(return_value=mock_result)
+        ) as mock_process:
             result = await extract_text_from_file(sample_pdf, "application/pdf")
 
         mock_process.assert_called_once_with(sample_pdf)
@@ -288,7 +304,9 @@ class TestExtractTextFromFile:
         """Image files are routed to process_image."""
         mock_result = OCRResult(text="Image text", page_count=1, success=True)
 
-        with patch("app.services.ocr.process_image", new=AsyncMock(return_value=mock_result)) as mock_process:
+        with patch(
+            "app.services.ocr.process_image", new=AsyncMock(return_value=mock_result)
+        ) as mock_process:
             result = await extract_text_from_file(sample_image, "image/jpeg")
 
         mock_process.assert_called_once_with(sample_image)

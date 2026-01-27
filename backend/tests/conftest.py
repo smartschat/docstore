@@ -1,13 +1,11 @@
 """Shared test fixtures for DocStore tests."""
 
 import json
-import os
-import re
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import AsyncGenerator
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import aiosqlite
 import pytest
@@ -29,6 +27,7 @@ def test_settings(tmp_path, monkeypatch):
 
     # Clear cached settings FIRST before setting env vars
     from app.config import get_settings
+
     get_settings.cache_clear()
 
     # Set environment variables
@@ -46,19 +45,19 @@ def test_settings(tmp_path, monkeypatch):
     settings = get_settings()
 
     # Patch settings in all modules that import it at module level
-    import app.main
-    import app.database
     import app.auth
-    import app.services.embeddings
-    import app.services.watcher
-    import app.services.queue
-    import app.services.qa
-    import app.services.ocr
-    import app.services.extraction
-    import app.routers.search
+    import app.database
+    import app.main
     import app.routers.documents
     import app.routers.qa
+    import app.routers.search
+    import app.services.embeddings
     import app.services.entities
+    import app.services.extraction
+    import app.services.ocr
+    import app.services.qa
+    import app.services.queue
+    import app.services.watcher
 
     monkeypatch.setattr(app.main, "settings", settings)
     monkeypatch.setattr(app.database, "settings", settings)
@@ -87,6 +86,7 @@ async def test_db(test_settings) -> AsyncGenerator[str, None]:
 
     # Initialize database schema
     from app.database import init_database
+
     await init_database()
 
     yield db_path
@@ -161,19 +161,33 @@ async def seeded_db(test_db) -> str:
     """Database pre-populated with test documents."""
     async with aiosqlite.connect(test_db) as db:
         for doc in SEED_DOCUMENTS:
-            await db.execute("""
+            await db.execute(
+                """
                 INSERT INTO documents (
                     id, filename, file_path, file_hash, file_size, mime_type,
                     raw_text, page_count, summary, title, category, counterparty,
                     document_date, status, extraction_status, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                doc["id"], doc["filename"], doc["file_path"], doc["file_hash"],
-                doc["file_size"], doc["mime_type"], doc["raw_text"], doc["page_count"],
-                doc["summary"], doc["title"], doc["category"], doc["counterparty"],
-                doc["document_date"], doc["status"], doc["extraction_status"],
-                datetime.utcnow().isoformat()
-            ))
+            """,
+                (
+                    doc["id"],
+                    doc["filename"],
+                    doc["file_path"],
+                    doc["file_hash"],
+                    doc["file_size"],
+                    doc["mime_type"],
+                    doc["raw_text"],
+                    doc["page_count"],
+                    doc["summary"],
+                    doc["title"],
+                    doc["category"],
+                    doc["counterparty"],
+                    doc["document_date"],
+                    doc["status"],
+                    doc["extraction_status"],
+                    datetime.utcnow().isoformat(),
+                ),
+            )
         await db.commit()
     return test_db
 
@@ -224,7 +238,8 @@ startxref
 def sample_image(tmp_path) -> Path:
     """Create a test image."""
     from PIL import Image
-    img = Image.new('RGB', (100, 100), color='white')
+
+    img = Image.new("RGB", (100, 100), color="white")
     img_path = tmp_path / "sample.jpg"
     img.save(img_path)
     return img_path
@@ -233,6 +248,7 @@ def sample_image(tmp_path) -> Path:
 @pytest.fixture
 def mock_ollama_response():
     """Factory for creating mock Ollama responses."""
+
     def _create_response(content: str | dict, status_code: int = 200):
         if isinstance(content, dict):
             content = json.dumps(content)
@@ -243,6 +259,7 @@ def mock_ollama_response():
         mock_response.raise_for_status = MagicMock()
         if status_code >= 400:
             from httpx import HTTPStatusError
+
             mock_response.raise_for_status.side_effect = HTTPStatusError(
                 "Error", request=MagicMock(), response=mock_response
             )
@@ -254,6 +271,7 @@ def mock_ollama_response():
 @pytest.fixture
 def mock_ollama_available():
     """Mock Ollama being available."""
+
     async def mock_get(*args, **kwargs):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -277,6 +295,7 @@ def mock_ollama_unavailable():
 def mock_embedding():
     """Create a mock embedding vector."""
     import numpy as np
+
     # 384-dimensional vector (MiniLM dimension)
     return np.random.randn(384).tolist()
 
@@ -285,8 +304,7 @@ def mock_embedding():
 def pytest_configure(config):
     """Configure pytest markers."""
     config.addinivalue_line(
-        "markers", "performance: marks tests as performance tests (deselect with '-m \"not performance\"')"
+        "markers",
+        "performance: marks tests as performance tests (deselect with '-m \"not performance\"')",
     )
-    config.addinivalue_line(
-        "markers", "integration: marks tests as integration tests"
-    )
+    config.addinivalue_line("markers", "integration: marks tests as integration tests")

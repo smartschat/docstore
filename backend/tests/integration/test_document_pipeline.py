@@ -1,11 +1,10 @@
 """Integration tests for document ingestion pipeline."""
 
-import pytest
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 import json
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiosqlite
+import pytest
 
 
 class TestUploadPipeline:
@@ -28,14 +27,21 @@ class TestUploadPipeline:
             "counterparty": "Test Company",
             "category": "invoice",
             "total_amount": 150.00,
-            "title": "Invoice from Test Company"
+            "title": "Invoice from Test Company",
         }
 
-        with patch("app.services.watcher.extract_text_from_file", new_callable=AsyncMock) as mock_ocr, \
-             patch("app.services.extraction.check_ollama_available", new_callable=AsyncMock) as mock_ollama_check, \
-             patch("app.services.extraction.call_ollama", new_callable=AsyncMock) as mock_call_ollama, \
-             patch("app.services.embeddings.generate_embedding") as mock_embed:
-
+        with (
+            patch(
+                "app.services.watcher.extract_text_from_file", new_callable=AsyncMock
+            ) as mock_ocr,
+            patch(
+                "app.services.extraction.check_ollama_available", new_callable=AsyncMock
+            ) as mock_ollama_check,
+            patch(
+                "app.services.extraction.call_ollama", new_callable=AsyncMock
+            ) as mock_call_ollama,
+            patch("app.services.embeddings.generate_embedding") as mock_embed,
+        ):
             mock_ocr.return_value = mock_ocr_result
             mock_ollama_check.return_value = True
             mock_call_ollama.return_value = json.dumps(extraction_response)
@@ -44,8 +50,7 @@ class TestUploadPipeline:
             # Upload document
             with open(sample_pdf, "rb") as f:
                 response = authenticated_client.post(
-                    "/api/documents/upload",
-                    files={"file": ("test.pdf", f, "application/pdf")}
+                    "/api/documents/upload", files={"file": ("test.pdf", f, "application/pdf")}
                 )
 
             assert response.status_code == 200
@@ -54,10 +59,7 @@ class TestUploadPipeline:
             # Verify document was created with extracted metadata
             async with aiosqlite.connect(test_db) as db:
                 db.row_factory = aiosqlite.Row
-                cursor = await db.execute(
-                    "SELECT * FROM documents WHERE id = ?",
-                    (doc_id,)
-                )
+                cursor = await db.execute("SELECT * FROM documents WHERE id = ?", (doc_id,))
                 row = await cursor.fetchone()
 
                 assert row is not None
@@ -75,18 +77,22 @@ class TestUploadPipeline:
         mock_ocr_result.page_count = 1
         mock_ocr_result.error = None
 
-        with patch("app.services.watcher.extract_text_from_file", new_callable=AsyncMock) as mock_ocr, \
-             patch("app.services.extraction.check_ollama_available", new_callable=AsyncMock) as mock_ollama_check, \
-             patch("app.services.embeddings.generate_embedding") as mock_embed:
-
+        with (
+            patch(
+                "app.services.watcher.extract_text_from_file", new_callable=AsyncMock
+            ) as mock_ocr,
+            patch(
+                "app.services.extraction.check_ollama_available", new_callable=AsyncMock
+            ) as mock_ollama_check,
+            patch("app.services.embeddings.generate_embedding") as mock_embed,
+        ):
             mock_ocr.return_value = mock_ocr_result
             mock_ollama_check.return_value = False  # Ollama unavailable
             mock_embed.return_value = [0.1] * 384
 
             with open(sample_pdf, "rb") as f:
                 response = authenticated_client.post(
-                    "/api/documents/upload",
-                    files={"file": ("test.pdf", f, "application/pdf")}
+                    "/api/documents/upload", files={"file": ("test.pdf", f, "application/pdf")}
                 )
 
             assert response.status_code == 200
@@ -95,8 +101,7 @@ class TestUploadPipeline:
             # Verify document was created with pending extraction status
             async with aiosqlite.connect(test_db) as db:
                 cursor = await db.execute(
-                    "SELECT extraction_status FROM documents WHERE id = ?",
-                    (doc_id,)
+                    "SELECT extraction_status FROM documents WHERE id = ?", (doc_id,)
                 )
                 row = await cursor.fetchone()
                 assert row[0] == "pending"
@@ -117,10 +122,15 @@ class TestUploadPipeline:
         pdf2 = tmp_path / "test2.pdf"
         pdf2.write_bytes(b"%PDF-1.4\ndifferent content here")
 
-        with patch("app.services.watcher.extract_text_from_file", new_callable=AsyncMock) as mock_ocr, \
-             patch("app.services.extraction.check_ollama_available", new_callable=AsyncMock) as mock_ollama_check, \
-             patch("app.services.embeddings.generate_embedding") as mock_embed:
-
+        with (
+            patch(
+                "app.services.watcher.extract_text_from_file", new_callable=AsyncMock
+            ) as mock_ocr,
+            patch(
+                "app.services.extraction.check_ollama_available", new_callable=AsyncMock
+            ) as mock_ollama_check,
+            patch("app.services.embeddings.generate_embedding") as mock_embed,
+        ):
             mock_ocr.return_value = mock_ocr_result
             mock_ollama_check.return_value = False
             mock_embed.return_value = [0.1] * 384
@@ -128,8 +138,7 @@ class TestUploadPipeline:
             # Upload first file
             with open(sample_pdf, "rb") as f:
                 response1 = authenticated_client.post(
-                    "/api/documents/upload",
-                    files={"file": ("test.pdf", f, "application/pdf")}
+                    "/api/documents/upload", files={"file": ("test.pdf", f, "application/pdf")}
                 )
             assert response1.status_code == 200
             doc1_id = response1.json()["id"]
@@ -137,8 +146,7 @@ class TestUploadPipeline:
             # Upload second file with same name but different content
             with open(pdf2, "rb") as f:
                 response2 = authenticated_client.post(
-                    "/api/documents/upload",
-                    files={"file": ("test.pdf", f, "application/pdf")}
+                    "/api/documents/upload", files={"file": ("test.pdf", f, "application/pdf")}
                 )
 
             # Should succeed with modified filename
@@ -155,8 +163,7 @@ class TestUploadPipeline:
 
         with open(unsupported_file, "rb") as f:
             response = authenticated_client.post(
-                "/api/documents/upload",
-                files={"file": ("test.exe", f, "application/octet-stream")}
+                "/api/documents/upload", files={"file": ("test.exe", f, "application/octet-stream")}
             )
 
         assert response.status_code == 400
@@ -177,7 +184,7 @@ class TestReprocessDocument:
         async with aiosqlite.connect(seeded_db) as db:
             await db.execute(
                 "UPDATE documents SET file_path = ? WHERE id = ?",
-                ("archive/invoice_2024.pdf", doc_id)
+                ("archive/invoice_2024.pdf", doc_id),
             )
             await db.commit()
 
@@ -190,7 +197,7 @@ class TestReprocessDocument:
         extraction_response = {
             "counterparty": "Updated Company",
             "category": "utilities",
-            "title": "Reprocessed Document"
+            "title": "Reprocessed Document",
         }
 
         # Create a fake file for the document
@@ -198,11 +205,16 @@ class TestReprocessDocument:
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_bytes(b"%PDF-1.4\ntest content")
 
-        with patch("app.services.ocr.extract_text_from_file", new_callable=AsyncMock) as mock_ocr, \
-             patch("app.services.extraction.check_ollama_available", new_callable=AsyncMock) as mock_ollama_check, \
-             patch("app.services.extraction.process_document_extraction", new_callable=AsyncMock) as mock_extraction, \
-             patch("app.services.embeddings.embed_document", new_callable=AsyncMock) as mock_embed:
-
+        with (
+            patch("app.services.ocr.extract_text_from_file", new_callable=AsyncMock) as mock_ocr,
+            patch(
+                "app.services.extraction.check_ollama_available", new_callable=AsyncMock
+            ) as mock_ollama_check,
+            patch(
+                "app.services.extraction.process_document_extraction", new_callable=AsyncMock
+            ) as mock_extraction,
+            patch("app.services.embeddings.embed_document", new_callable=AsyncMock) as mock_embed,
+        ):
             mock_ocr.return_value = mock_ocr_result
             mock_ollama_check.return_value = True
             mock_extraction.return_value = extraction_response
@@ -214,9 +226,7 @@ class TestReprocessDocument:
             assert response.json()["message"] == "Document reprocessed successfully"
 
     @pytest.mark.asyncio
-    async def test_reprocess_nonexistent_document_returns_404(
-        self, authenticated_client, test_db
-    ):
+    async def test_reprocess_nonexistent_document_returns_404(self, authenticated_client, test_db):
         """Reprocessing non-existent document returns 404."""
         response = authenticated_client.post("/api/reprocess/nonexistent-id")
 
@@ -235,28 +245,39 @@ class TestQueueProcessor:
 
         # Insert a document with pending extraction
         async with aiosqlite.connect(test_db) as db:
-            await db.execute("""
+            await db.execute(
+                """
                 INSERT INTO documents (
                     id, filename, file_path, file_hash, file_size, mime_type,
                     raw_text, page_count, status, extraction_status, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                "pending-doc-001", "pending.pdf", "archive/pending.pdf",
-                "hash123", 1024, "application/pdf",
-                raw_text,
-                1, "processing", "pending", "2024-01-01T00:00:00"
-            ))
+            """,
+                (
+                    "pending-doc-001",
+                    "pending.pdf",
+                    "archive/pending.pdf",
+                    "hash123",
+                    1024,
+                    "application/pdf",
+                    raw_text,
+                    1,
+                    "processing",
+                    "pending",
+                    "2024-01-01T00:00:00",
+                ),
+            )
             await db.commit()
 
         extraction_response = {
             "counterparty": "Queue Company",
             "category": "invoice",
             "total_amount": 200.00,
-            "title": "Queue Test Invoice"
+            "title": "Queue Test Invoice",
         }
 
-        with patch("app.services.queue.process_document_extraction", new_callable=AsyncMock) as mock_extraction:
-
+        with patch(
+            "app.services.queue.process_document_extraction", new_callable=AsyncMock
+        ) as mock_extraction:
             mock_extraction.return_value = extraction_response
 
             # Process the pending extraction - function expects a dict with 'id' and 'raw_text'
@@ -269,7 +290,7 @@ class TestQueueProcessor:
             async with aiosqlite.connect(test_db) as db:
                 cursor = await db.execute(
                     "SELECT extraction_status, counterparty FROM documents WHERE id = ?",
-                    ("pending-doc-001",)
+                    ("pending-doc-001",),
                 )
                 row = await cursor.fetchone()
                 assert row[0] == "completed"
