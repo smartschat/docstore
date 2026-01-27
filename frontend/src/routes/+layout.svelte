@@ -2,36 +2,24 @@
 	import '../app.css';
 	import { page } from '$app/stores';
 	import { isAuthenticated } from '$stores/documents';
-	import { logout, getStats } from '$lib/api';
+	import { logout } from '$lib/api';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 
-	let pendingReviews = 0;
-
 	// Register service worker for PWA support
-	onMount(async () => {
+	onMount(() => {
 		if (browser && 'serviceWorker' in navigator) {
 			navigator.serviceWorker.register('/sw.js').catch((error) => {
 				console.warn('Service worker registration failed:', error);
 			});
-		}
-
-		// Load pending reviews count
-		if (browser && $page.url.pathname !== '/login') {
-			try {
-				const stats = await getStats();
-				pendingReviews = stats.pending_reviews;
-			} catch {
-				// Ignore errors (e.g., not authenticated)
-			}
 		}
 	});
 
 	const navItems = [
 		{ href: '/', label: 'Dashboard', icon: 'home' },
 		{ href: '/documents', label: 'Documents', icon: 'folder' },
-		{ href: '/entities', label: 'Entities', icon: 'users', showPendingBadge: true },
+		{ href: '/entities', label: 'Entities', icon: 'users' },
 		{ href: '/ask', label: 'Ask', icon: 'chat' }
 	];
 
@@ -63,7 +51,7 @@
 										? 'bg-primary-50 text-primary-700'
 										: 'text-slate-600 hover:bg-slate-100'}"
 								>
-									{item.label}{#if item.showPendingBadge && pendingReviews > 0}<span class="ml-1 text-orange-600">({pendingReviews})</span>{/if}
+									{item.label}
 								</a>
 							{/each}
 						</nav>
