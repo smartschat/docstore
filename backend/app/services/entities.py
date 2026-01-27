@@ -31,6 +31,14 @@ def similarity_score(s1: str, s2: str) -> float:
     return SequenceMatcher(None, s1.lower(), s2.lower()).ratio()
 
 
+def _strip(value: str | None) -> str | None:
+    """Strip whitespace from a string, returning None if empty."""
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped if stripped else None
+
+
 # ============== Counterparty CRUD ==============
 
 
@@ -41,6 +49,12 @@ async def create_counterparty(
     notes: str | None = None,
 ) -> str:
     """Create a new counterparty with optional aliases."""
+    # Strip whitespace from all inputs
+    canonical_name = canonical_name.strip()
+    short_name = _strip(short_name)
+    notes = _strip(notes)
+    aliases = [a.strip() for a in (aliases or []) if a.strip()]
+
     entity_id = generate_id()
     now = datetime.utcnow().isoformat()
 
@@ -84,9 +98,7 @@ async def get_counterparty(entity_id: str) -> Counterparty | None:
     async with aiosqlite.connect(settings.database_path) as db:
         db.row_factory = aiosqlite.Row
 
-        cursor = await db.execute(
-            "SELECT * FROM counterparties WHERE id = ?", (entity_id,)
-        )
+        cursor = await db.execute("SELECT * FROM counterparties WHERE id = ?", (entity_id,))
         row = await cursor.fetchone()
 
         if not row:
@@ -143,9 +155,7 @@ async def list_counterparties(search: str | None = None) -> list[Counterparty]:
                 (f"%{search}%", f"%{search}%", f"%{search}%"),
             )
         else:
-            cursor = await db.execute(
-                "SELECT * FROM counterparties ORDER BY canonical_name"
-            )
+            cursor = await db.execute("SELECT * FROM counterparties ORDER BY canonical_name")
 
         rows = await cursor.fetchall()
 
@@ -165,11 +175,17 @@ async def update_counterparty(
     notes: str | None = None,
 ) -> Counterparty | None:
     """Update a counterparty's fields."""
+    # Strip whitespace from inputs
+    if canonical_name is not None:
+        canonical_name = canonical_name.strip()
+    short_name = _strip(short_name) if short_name is not None else None
+    notes = _strip(notes) if notes is not None else None
+
     async with aiosqlite.connect(settings.database_path) as db:
         updates = []
         params = []
 
-        if canonical_name is not None:
+        if canonical_name is not None and canonical_name:
             updates.append("canonical_name = ?")
             params.append(canonical_name)
         if short_name is not None:
@@ -202,19 +218,22 @@ async def delete_counterparty(entity_id: str) -> bool:
             (entity_id,),
         )
 
-        # Delete counterparty (cascades to aliases)
-        cursor = await db.execute(
-            "DELETE FROM counterparties WHERE id = ?", (entity_id,)
-        )
+        # Delete aliases explicitly (CASCADE requires PRAGMA foreign_keys per connection)
+        await db.execute("DELETE FROM counterparty_aliases WHERE counterparty_id = ?", (entity_id,))
+
+        # Delete counterparty
+        cursor = await db.execute("DELETE FROM counterparties WHERE id = ?", (entity_id,))
         await db.commit()
 
         return cursor.rowcount > 0
 
 
-async def add_counterparty_alias(
-    entity_id: str, alias: str, source: str = "manual"
-) -> bool:
+async def add_counterparty_alias(entity_id: str, alias: str, source: str = "manual") -> bool:
     """Add an alias to a counterparty."""
+    alias = alias.strip()
+    if not alias:
+        return False
+
     async with aiosqlite.connect(settings.database_path) as db:
         try:
             await db.execute(
@@ -234,9 +253,7 @@ async def add_counterparty_alias(
 async def remove_counterparty_alias(alias_id: int) -> bool:
     """Remove an alias from a counterparty."""
     async with aiosqlite.connect(settings.database_path) as db:
-        cursor = await db.execute(
-            "DELETE FROM counterparty_aliases WHERE id = ?", (alias_id,)
-        )
+        cursor = await db.execute("DELETE FROM counterparty_aliases WHERE id = ?", (alias_id,))
         await db.commit()
         return cursor.rowcount > 0
 
@@ -279,6 +296,13 @@ async def create_person(
     notes: str | None = None,
 ) -> str:
     """Create a new person with optional aliases."""
+    # Strip whitespace from all inputs
+    canonical_name = canonical_name.strip()
+    first_name = _strip(first_name)
+    last_name = _strip(last_name)
+    notes = _strip(notes)
+    aliases = [a.strip() for a in (aliases or []) if a.strip()]
+
     entity_id = generate_id()
     now = datetime.utcnow().isoformat()
 
@@ -329,9 +353,7 @@ async def get_person(entity_id: str) -> Person | None:
             return None
 
         # Get aliases
-        cursor = await db.execute(
-            "SELECT * FROM person_aliases WHERE person_id = ?", (entity_id,)
-        )
+        cursor = await db.execute("SELECT * FROM person_aliases WHERE person_id = ?", (entity_id,))
         alias_rows = await cursor.fetchall()
 
         aliases = [
@@ -400,11 +422,18 @@ async def update_person(
     notes: str | None = None,
 ) -> Person | None:
     """Update a person's fields."""
+    # Strip whitespace from inputs
+    if canonical_name is not None:
+        canonical_name = canonical_name.strip()
+    first_name = _strip(first_name) if first_name is not None else None
+    last_name = _strip(last_name) if last_name is not None else None
+    notes = _strip(notes) if notes is not None else None
+
     async with aiosqlite.connect(settings.database_path) as db:
         updates = []
         params = []
 
-        if canonical_name is not None:
+        if canonical_name is not None and canonical_name:
             updates.append("canonical_name = ?")
             params.append(canonical_name)
         if first_name is not None:
@@ -435,11 +464,12 @@ async def delete_person(entity_id: str) -> bool:
     """Delete a person and unlink from documents."""
     async with aiosqlite.connect(settings.database_path) as db:
         # Unlink documents
-        await db.execute(
-            "DELETE FROM document_persons WHERE person_id = ?", (entity_id,)
-        )
+        await db.execute("DELETE FROM document_persons WHERE person_id = ?", (entity_id,))
 
-        # Delete person (cascades to aliases)
+        # Delete aliases explicitly (CASCADE requires PRAGMA foreign_keys per connection)
+        await db.execute("DELETE FROM person_aliases WHERE person_id = ?", (entity_id,))
+
+        # Delete person
         cursor = await db.execute("DELETE FROM persons WHERE id = ?", (entity_id,))
         await db.commit()
 
@@ -448,6 +478,10 @@ async def delete_person(entity_id: str) -> bool:
 
 async def add_person_alias(entity_id: str, alias: str, source: str = "manual") -> bool:
     """Add an alias to a person."""
+    alias = alias.strip()
+    if not alias:
+        return False
+
     async with aiosqlite.connect(settings.database_path) as db:
         try:
             await db.execute(
@@ -466,9 +500,7 @@ async def add_person_alias(entity_id: str, alias: str, source: str = "manual") -
 async def remove_person_alias(alias_id: int) -> bool:
     """Remove an alias from a person."""
     async with aiosqlite.connect(settings.database_path) as db:
-        cursor = await db.execute(
-            "DELETE FROM person_aliases WHERE id = ?", (alias_id,)
-        )
+        cursor = await db.execute("DELETE FROM person_aliases WHERE id = ?", (alias_id,))
         await db.commit()
         return cursor.rowcount > 0
 
@@ -497,9 +529,7 @@ async def merge_persons(keep_id: str, merge_id: str) -> Person | None:
         )
 
         # Delete any remaining document_persons (duplicates)
-        await db.execute(
-            "DELETE FROM document_persons WHERE person_id = ?", (merge_id,)
-        )
+        await db.execute("DELETE FROM document_persons WHERE person_id = ?", (merge_id,))
 
         # Delete the merged person
         await db.execute("DELETE FROM persons WHERE id = ?", (merge_id,))
@@ -512,9 +542,7 @@ async def merge_persons(keep_id: str, merge_id: str) -> Person | None:
 # ============== Document-Person Linking ==============
 
 
-async def link_person_to_document(
-    doc_id: str, person_id: str, role: str = "affected"
-) -> bool:
+async def link_person_to_document(doc_id: str, person_id: str, role: str = "affected") -> bool:
     """Link a person to a document."""
     async with aiosqlite.connect(settings.database_path) as db:
         try:
@@ -612,9 +640,7 @@ async def find_counterparty_by_name(name: str) -> DisambiguationResult:
             )
 
         # Step 2: Find candidates using fuzzy matching
-        cursor = await db.execute(
-            "SELECT id, canonical_name FROM counterparties"
-        )
+        cursor = await db.execute("SELECT id, canonical_name FROM counterparties")
         all_counterparties = await cursor.fetchall()
 
         candidates = []
@@ -885,9 +911,7 @@ async def resolve_counterparty_disambiguation(
     # Get raw name first
     async with aiosqlite.connect(settings.database_path) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            "SELECT counterparty FROM documents WHERE id = ?", (doc_id,)
-        )
+        cursor = await db.execute("SELECT counterparty FROM documents WHERE id = ?", (doc_id,))
         row = await cursor.fetchone()
 
         if not row:
@@ -940,9 +964,7 @@ async def resolve_person_disambiguation(
     # Get raw name first
     async with aiosqlite.connect(settings.database_path) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            "SELECT affected_person FROM documents WHERE id = ?", (doc_id,)
-        )
+        cursor = await db.execute("SELECT affected_person FROM documents WHERE id = ?", (doc_id,))
         row = await cursor.fetchone()
 
         if not row:
