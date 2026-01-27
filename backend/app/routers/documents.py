@@ -210,12 +210,14 @@ async def list_documents(
             tags = await get_document_tags(row_dict["id"])
             counterparty_name = await get_counterparty_name(row_dict.get("counterparty_id"))
             linked_persons = await get_linked_persons(row_dict["id"])
-            documents.append(row_to_document(
-                row_dict,
-                tags,
-                counterparty_name=counterparty_name,
-                linked_persons=linked_persons,
-            ))
+            documents.append(
+                row_to_document(
+                    row_dict,
+                    tags,
+                    counterparty_name=counterparty_name,
+                    linked_persons=linked_persons,
+                )
+            )
 
         return DocumentList(
             items=documents,
@@ -293,7 +295,17 @@ async def upload_document(
     tags = await get_document_tags(doc_id)
     counterparty_name = await get_counterparty_name(row.get("counterparty_id"))
     linked_persons = await get_linked_persons(doc_id)
-    return row_to_document(row, tags, counterparty_name=counterparty_name, linked_persons=linked_persons)
+    return row_to_document(
+        row, tags, counterparty_name=counterparty_name, linked_persons=linked_persons
+    )
+
+
+def _strip(value: str | None) -> str | None:
+    """Strip whitespace from a string, returning None if empty."""
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped if stripped else None
 
 
 @router.patch("/{doc_id}", response_model=Document)
@@ -310,6 +322,12 @@ async def update_document(
     # Build update query dynamically based on provided fields
     update_data = update.model_dump(exclude_unset=True)
 
+    # Strip whitespace from string fields
+    string_fields = ["title", "counterparty", "affected_person", "category", "reference", "summary"]
+    for field in string_fields:
+        if field in update_data:
+            update_data[field] = _strip(update_data[field])
+
     # Extract the add_alias flag before processing (not a DB field)
     add_alias = update_data.pop("add_counterparty_alias", True)
 
@@ -320,10 +338,9 @@ async def update_document(
             # Add the raw counterparty name as an alias for future matching (if enabled)
             if add_alias and row.get("counterparty"):
                 from app.services.entities import add_counterparty_alias
+
                 await add_counterparty_alias(
-                    update_data["counterparty_id"],
-                    row["counterparty"],
-                    "llm_extracted"
+                    update_data["counterparty_id"], row["counterparty"], "llm_extracted"
                 )
         else:
             update_data["counterparty_disambiguation"] = "unmatched"
@@ -348,7 +365,9 @@ async def update_document(
     tags = await get_document_tags(doc_id)
     counterparty_name = await get_counterparty_name(row.get("counterparty_id"))
     linked_persons = await get_linked_persons(doc_id)
-    return row_to_document(row, tags, counterparty_name=counterparty_name, linked_persons=linked_persons)
+    return row_to_document(
+        row, tags, counterparty_name=counterparty_name, linked_persons=linked_persons
+    )
 
 
 @router.delete("/{doc_id}")
