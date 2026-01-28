@@ -276,11 +276,12 @@ class TestDisambiguation:
             await db.commit()
 
         # Run disambiguation
-        cp_result, person_result = await entities.disambiguate_document("doc-001")
+        cp_result, person_results = await entities.disambiguate_document("doc-001")
 
         # Should auto-match since exact aliases exist
         assert cp_result.status == DisambiguationStatus.AUTO_MATCHED
-        assert person_result.status == DisambiguationStatus.AUTO_MATCHED
+        assert len(person_results) == 1
+        assert person_results[0].status == DisambiguationStatus.AUTO_MATCHED
 
     @pytest.mark.asyncio
     async def test_resolve_counterparty_disambiguation(self, seeded_db):

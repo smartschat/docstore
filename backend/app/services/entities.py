@@ -761,8 +761,10 @@ async def find_person_by_name(name: str) -> DisambiguationResult:
         )
 
 
-async def disambiguate_document(doc_id: str) -> tuple[DisambiguationResult, DisambiguationResult]:
-    """Run disambiguation on a document's extracted counterparty and affected_person."""
+async def disambiguate_document(
+    doc_id: str,
+) -> tuple[DisambiguationResult, list[DisambiguationResult]]:
+    """Run disambiguation on a document's extracted counterparty and affected_person(s)."""
     # Get document data first
     async with aiosqlite.connect(settings.database_path) as db:
         db.row_factory = aiosqlite.Row
@@ -775,12 +777,19 @@ async def disambiguate_document(doc_id: str) -> tuple[DisambiguationResult, Disa
     if not row:
         return (
             DisambiguationResult(raw_name="", status=DisambiguationStatus.UNMATCHED),
-            DisambiguationResult(raw_name="", status=DisambiguationStatus.UNMATCHED),
+            [DisambiguationResult(raw_name="", status=DisambiguationStatus.UNMATCHED)],
         )
 
     # Find matches (these don't hold locks)
     counterparty_result = await find_counterparty_by_name(row["counterparty"])
-    person_result = await find_person_by_name(row["affected_person"])
+
+    # Split affected_person by semicolon to handle multiple persons
+    affected_persons_raw = row["affected_person"] or ""
+    person_names = [p.strip() for p in affected_persons_raw.split(";") if p.strip()]
+    person_results = []
+    for person_name in person_names:
+        person_result = await find_person_by_name(person_name)
+        person_results.append(person_result)
 
     # Update counterparty disambiguation
     if counterparty_result.status == DisambiguationStatus.AUTO_MATCHED:
@@ -817,40 +826,47 @@ async def disambiguate_document(doc_id: str) -> tuple[DisambiguationResult, Disa
             )
             await db.commit()
 
-    # Update person disambiguation
-    if person_result.status == DisambiguationStatus.AUTO_MATCHED:
-        # Link person to document
-        await link_person_to_document(doc_id, person_result.matched_entity_id)
-        async with aiosqlite.connect(settings.database_path) as db:
-            await db.execute(
-                "UPDATE documents SET persons_disambiguation = 'auto_matched' WHERE id = ?",
-                (doc_id,),
-            )
-            await db.commit()
+    # Update person disambiguation - process each person individually
+    has_pending = False
+    has_unmatched = False
+    all_matched = True
 
-        # Add raw name as alias if it's new (for future matching)
-        if row["affected_person"]:
-            await add_person_alias(
-                person_result.matched_entity_id,
-                row["affected_person"],
-                "llm_extracted",
-            )
-    elif person_result.status == DisambiguationStatus.PENDING:
-        async with aiosqlite.connect(settings.database_path) as db:
-            await db.execute(
-                "UPDATE documents SET persons_disambiguation = 'pending' WHERE id = ?",
-                (doc_id,),
-            )
-            await db.commit()
-    elif person_result.status == DisambiguationStatus.UNMATCHED:
-        async with aiosqlite.connect(settings.database_path) as db:
-            await db.execute(
-                "UPDATE documents SET persons_disambiguation = 'unmatched' WHERE id = ?",
-                (doc_id,),
-            )
-            await db.commit()
+    for person_result in person_results:
+        if person_result.status == DisambiguationStatus.AUTO_MATCHED:
+            # Link person to document
+            await link_person_to_document(doc_id, person_result.matched_entity_id)
+            # Add raw name as alias if it's new (for future matching)
+            if person_result.raw_name:
+                await add_person_alias(
+                    person_result.matched_entity_id,
+                    person_result.raw_name,
+                    "llm_extracted",
+                )
+        elif person_result.status == DisambiguationStatus.PENDING:
+            has_pending = True
+            all_matched = False
+        elif person_result.status == DisambiguationStatus.UNMATCHED:
+            has_unmatched = True
+            all_matched = False
 
-    return counterparty_result, person_result
+    # Determine overall persons_disambiguation status
+    if person_results and all_matched:
+        status = "auto_matched"
+    elif has_pending:
+        status = "pending"
+    elif has_unmatched:
+        status = "unmatched"
+    else:
+        status = "unmatched"
+
+    async with aiosqlite.connect(settings.database_path) as db:
+        await db.execute(
+            "UPDATE documents SET persons_disambiguation = ? WHERE id = ?",
+            (status, doc_id),
+        )
+        await db.commit()
+
+    return counterparty_result, person_results
 
 
 async def get_pending_disambiguations() -> list[dict]:

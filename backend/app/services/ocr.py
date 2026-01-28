@@ -88,21 +88,16 @@ async def process_pdf(
                 error=f"OCR failed: {stderr.decode()}",
             )
 
-        # Read extracted text
-        text = ""
-        try:
-            with open(sidecar_path, "r", encoding="utf-8") as f:
-                text = f.read()
-        finally:
-            Path(sidecar_path).unlink(missing_ok=True)
+        # Clean up sidecar file (we don't use it anymore)
+        Path(sidecar_path).unlink(missing_ok=True)
 
-        # If sidecar is empty or only contains skip markers, try extracting existing text
-        # Skip markers look like: "[OCR skipped on page(s) 1-3]" or "[OCR skipped on page(s) 1]"
-        import re
-
-        text_without_markers = re.sub(r"\[OCR skipped on page\(s\)[^\]]*\]", "", text).strip()
-        if not text_without_markers:
-            text = await extract_text_with_pdftotext(output_path)
+        # Always use pdftotext to extract text from the output PDF.
+        # This works because:
+        # - Pages with existing text: preserved by --skip-text, pdftotext reads them
+        # - Pages without text: now have OCR layer added, pdftotext reads them
+        # This avoids the issue where the sidecar file shows "[OCR skipped on page(s) X]"
+        # markers but doesn't include the actual text from those pages.
+        text = await extract_text_with_pdftotext(output_path)
 
         # Get page count using pdfinfo or similar
         page_count = await get_pdf_page_count(output_path)

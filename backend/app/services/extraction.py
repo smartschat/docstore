@@ -15,7 +15,7 @@ settings = get_settings()
 METADATA_PROMPT = """Extract these fields from the document. Return JSON only.
 
 - counterparty: Company or organization that issued this document (the employer for salary docs, the company for invoices)
-- affected_person: Full name of the person this document is about (look for "Herr/Frau" or name in address)
+- affected_persons: List of full names of people this document is about (look for "Herr/Frau", names in address, or names in body). Return as JSON array, e.g. ["Max Mustermann", "Erika Mustermann"]
 - category: Choose one:
   - salary: Lohnsteuerbescheinigung, Gehaltsabrechnung, payslips, wage documents
   - tax: Steuerbescheid, tax assessments, Finanzamt letters
@@ -209,11 +209,18 @@ async def extract_document_data(text: str) -> dict[str, Any]:
     print("  Step 3: Generating title...")
     title = await generate_title(summary) if summary else None
 
+    # Handle affected_persons list - join with semicolon for storage
+    affected_persons = metadata.get("affected_persons") or metadata.get("affected_person")
+    if isinstance(affected_persons, list):
+        affected_person = "; ".join(p.strip() for p in affected_persons if p and p.strip())
+    else:
+        affected_person = affected_persons
+
     # Combine results
     return {
         "title": title,
         "counterparty": metadata.get("counterparty"),
-        "affected_person": metadata.get("affected_person"),
+        "affected_person": affected_person,
         "category": metadata.get("category"),
         "reference": metadata.get("reference"),
         "document_date": metadata.get("document_date"),
