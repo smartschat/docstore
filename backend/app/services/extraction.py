@@ -1,7 +1,9 @@
 """LLM-powered structured data extraction using Ollama."""
 
+import base64
 import json
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -9,6 +11,68 @@ import httpx
 from app.config import get_settings
 
 settings = get_settings()
+
+
+async def pdf_to_base64_images(pdf_path: Path, max_pages: int = 1) -> list[str]:
+    """Convert PDF pages to base64-encoded images for vision models.
+
+    Args:
+        pdf_path: Path to the PDF file
+        max_pages: Maximum number of pages to convert (default: 3)
+
+    Returns:
+        List of base64-encoded PNG images
+    """
+    import asyncio
+    import io
+
+    try:
+        # pdf2image requires poppler
+        from pdf2image import convert_from_path
+
+        # Run in thread pool since pdf2image is blocking
+        loop = asyncio.get_event_loop()
+        images = await loop.run_in_executor(
+            None,
+            lambda: convert_from_path(
+                pdf_path,
+                first_page=1,
+                last_page=max_pages,
+                dpi=150,  # Balance between quality and size
+            ),
+        )
+
+        base64_images = []
+        for img in images:
+            buffer = io.BytesIO()
+            img.save(buffer, format="PNG")
+            b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+            base64_images.append(b64)
+
+        return base64_images
+    except Exception as e:
+        print(f"Failed to convert PDF to images: {e}")
+        return []
+
+
+# Vision prompt - extracts everything in one call
+VISION_EXTRACT_PROMPT = """Don't think too much. Use at most two paragraphs of thinking.
+
+Look at this document image and extract the following. Return JSON only.
+
+{
+  "counterparty": "Company or organization that issued this document",
+  "affected_persons": ["List of full names of people this document is about"],
+  "category": "One of: salary, tax, insurance, medical, banking, utilities, invoice, receipt, contract, legal, correspondence, other",
+  "reference": "Reference/invoice/policy number",
+  "document_date": "Main date as YYYY-MM-DD",
+  "summary": "1-2 sentence summary in the document's language (German or English)",
+  "title": "Short title in German (2-5 words)"
+}
+
+Return only valid JSON. Use null for unknown fields.
+
+JSON:"""
 
 
 # Step 1: Extract structured metadata
@@ -105,12 +169,40 @@ def strip_thinking(text: str) -> str:
     return text.strip()
 
 
-async def call_ollama(prompt: str) -> str:
-    """Make a single call to Ollama and return the response text."""
+async def call_ollama(prompt: str, images: list[str] | None = None) -> str:
+    """Make a single call to Ollama and return the response text.
+
+    Args:
+        prompt: The prompt text
+        images: Optional list of base64-encoded images for vision models
+    """
     async with httpx.AsyncClient(timeout=settings.ollama_timeout) as client:
-        response = await client.post(
-            f"{settings.ollama_base_url}/api/generate",
-            json={
+        if images:
+            # Vision models use the /api/chat endpoint with images in the message
+            payload = {
+                "model": settings.ollama_model,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt,
+                        "images": images,
+                    }
+                ],
+                "stream": False,
+                "options": {
+                    "temperature": 0,
+                },
+            }
+            response = await client.post(
+                f"{settings.ollama_base_url}/api/chat",
+                json=payload,
+            )
+            response.raise_for_status()
+            result = response.json()
+            text = result.get("message", {}).get("content", "").strip()
+        else:
+            # Text-only models use /api/generate
+            payload = {
                 "model": settings.ollama_model,
                 "prompt": prompt,
                 "stream": False,
@@ -118,20 +210,50 @@ async def call_ollama(prompt: str) -> str:
                 "options": {
                     "temperature": 0,
                 },
-            },
-        )
-        response.raise_for_status()
-        result = response.json()
-        text = result.get("response", "").strip()
+            }
+            response = await client.post(
+                f"{settings.ollama_base_url}/api/generate",
+                json=payload,
+            )
+            response.raise_for_status()
+            result = response.json()
+            text = result.get("response", "").strip()
+
         # Strip any thinking blocks that might be included
         return strip_thinking(text)
 
 
-async def extract_metadata(text: str) -> dict[str, Any]:
-    """Step 1: Extract structured metadata fields."""
-    truncated = text[:6000]
-
+async def extract_all_with_vision(images: list[str]) -> dict[str, Any]:
+    """Extract all fields in one vision API call."""
     try:
+        response = await call_ollama(VISION_EXTRACT_PROMPT, images=images)
+        data = parse_json_response(response)
+
+        # Validate date
+        if data.get("document_date"):
+            try:
+                date.fromisoformat(data["document_date"])
+            except (ValueError, TypeError):
+                data["document_date"] = None
+
+        # Validate title length
+        title = data.get("title")
+        if title:
+            title = title.strip().strip("\"'").split("\n")[0]
+            if not (3 <= len(title) <= 100):
+                title = None
+            data["title"] = title
+
+        return data
+    except Exception as e:
+        print(f"Vision extraction error: {e}")
+        return {}
+
+
+async def extract_metadata(text: str) -> dict[str, Any]:
+    """Extract structured metadata fields from text."""
+    try:
+        truncated = text[:6000]
         response = await call_ollama(METADATA_PROMPT.format(text=truncated))
         data = parse_json_response(response)
 
@@ -167,10 +289,9 @@ async def generate_title(summary: str) -> str | None:
 
 
 async def generate_summary(text: str) -> str | None:
-    """Step 3: Generate a summary in the document's language."""
-    truncated = text[:4000]
-
+    """Generate a summary in the document's language."""
     try:
+        truncated = text[:4000]
         response = await call_ollama(SUMMARY_PROMPT.format(text=truncated))
 
         # Clean up - take first 1-2 sentences
@@ -183,12 +304,13 @@ async def generate_summary(text: str) -> str | None:
         return None
 
 
-async def extract_document_data(text: str) -> dict[str, Any]:
+async def extract_document_data(text: str, pdf_path: Path | None = None) -> dict[str, Any]:
     """
     Extract structured data from document text using multi-step extraction.
 
     Args:
         text: Document text (from OCR)
+        pdf_path: Optional path to PDF for vision model extraction
 
     Returns:
         Dict with extracted fields
@@ -197,6 +319,39 @@ async def extract_document_data(text: str) -> dict[str, Any]:
         print("Warning: Ollama not available, skipping extraction")
         return get_empty_extraction()
 
+    # Prepare images for vision mode if enabled and PDF available
+    images = None
+    if settings.ollama_use_vision and pdf_path and pdf_path.exists():
+        print("  Preparing images for vision model...")
+        images = await pdf_to_base64_images(pdf_path, max_pages=1)
+        if images:
+            print(f"  Converted {len(images)} page(s) to images")
+        else:
+            print("  Warning: Failed to convert PDF to images, falling back to text")
+
+    # Vision mode: single API call for everything
+    if images and settings.ollama_use_vision:
+        print("  Extracting all fields with vision (single call)...")
+        data = await extract_all_with_vision(images)
+
+        # Handle affected_persons list
+        affected_persons = data.get("affected_persons") or data.get("affected_person")
+        if isinstance(affected_persons, list):
+            affected_person = "; ".join(p.strip() for p in affected_persons if p and p.strip())
+        else:
+            affected_person = affected_persons
+
+        return {
+            "title": data.get("title"),
+            "counterparty": data.get("counterparty"),
+            "affected_person": affected_person,
+            "category": data.get("category"),
+            "reference": data.get("reference"),
+            "document_date": data.get("document_date"),
+            "summary": data.get("summary"),
+        }
+
+    # Text mode: multi-step extraction
     # Step 1: Extract metadata
     print("  Step 1: Extracting metadata...")
     metadata = await extract_metadata(text)
@@ -228,15 +383,18 @@ async def extract_document_data(text: str) -> dict[str, Any]:
     }
 
 
-async def process_document_extraction(doc_id: str, text: str) -> dict[str, Any]:
+async def process_document_extraction(
+    doc_id: str, text: str, pdf_path: Path | None = None
+) -> dict[str, Any]:
     """
     Run extraction pipeline on a document.
 
     Args:
         doc_id: Document ID
         text: Document text
+        pdf_path: Optional path to PDF for vision model extraction
 
     Returns:
         Dict with all extracted fields
     """
-    return await extract_document_data(text)
+    return await extract_document_data(text, pdf_path=pdf_path)

@@ -27,7 +27,7 @@ async def get_pending_extractions(limit: int = 5) -> list[dict]:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
             """
-            SELECT id, raw_text FROM documents
+            SELECT id, raw_text, file_path FROM documents
             WHERE extraction_status = 'pending' AND raw_text IS NOT NULL
             ORDER BY created_at ASC
             LIMIT ?
@@ -35,7 +35,10 @@ async def get_pending_extractions(limit: int = 5) -> list[dict]:
             (limit,),
         )
         rows = await cursor.fetchall()
-        return [{"id": row["id"], "raw_text": row["raw_text"]} for row in rows]
+        return [
+            {"id": row["id"], "raw_text": row["raw_text"], "file_path": row["file_path"]}
+            for row in rows
+        ]
 
 
 async def get_queue_stats() -> dict:
@@ -78,10 +81,18 @@ async def process_pending_extraction(doc: dict) -> bool:
 
     doc_id = doc["id"]
     raw_text = doc["raw_text"]
+    file_path = doc.get("file_path")
+
+    # Resolve full path for vision model
+    pdf_path = None
+    if file_path:
+        pdf_path = settings.data_dir / file_path
+        if not pdf_path.exists():
+            pdf_path = None
 
     try:
         print(f"Processing queued extraction for {doc_id}")
-        extraction_result = await process_document_extraction(doc_id, raw_text)
+        extraction_result = await process_document_extraction(doc_id, raw_text, pdf_path=pdf_path)
         await update_document_extraction(doc_id, extraction_result)
         await update_extraction_status(doc_id, "completed")
 

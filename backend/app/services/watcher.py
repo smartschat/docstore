@@ -223,7 +223,9 @@ async def process_document(file_path: Path) -> Optional[str]:
             from app.services.extraction import check_ollama_available
 
             if await check_ollama_available():
-                extraction_result = await process_document_extraction(doc_id, ocr_result.text)
+                extraction_result = await process_document_extraction(
+                    doc_id, ocr_result.text, pdf_path=archive_path
+                )
                 await update_document_extraction(doc_id, extraction_result)
                 await update_extraction_status(doc_id, "completed")
 

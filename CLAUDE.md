@@ -57,7 +57,7 @@ cd backend && uv run python -m uvicorn app.main:app --reload
 - `app/main.py` - FastAPI app with lifespan management, starts folder watcher and queue processor on startup
 - `app/database.py` - SQLite schema with FTS5 full-text search
 - `app/services/ocr.py` - OCR processing using ocrmypdf
-- `app/services/extraction.py` - LLM-powered structured data extraction via Ollama (title, counterparty, category, amounts, dates)
+- `app/services/extraction.py` - LLM-powered structured data extraction via Ollama (title, counterparty, category, amounts, dates). Supports vision models for direct PDF image analysis.
 - `app/services/embeddings.py` - Local embeddings using ONNX Runtime (all-MiniLM-L6-v2, 384 dims), ARM compatible
 - `app/services/queue.py` - Background processor for documents queued when Ollama was unavailable
 - `app/services/qa.py` - RAG-based Q&A using semantic search to find relevant documents
@@ -74,6 +74,8 @@ cd backend && uv run python -m uvicorn app.main:app --reload
 1. Documents enter via upload or `data/inbox/` folder watch
 2. OCR extracts text (ocrmypdf with deu+eng language support)
 3. LLM extraction pulls structured fields (counterparty, amounts, dates, category)
+   - Text mode: uses OCR text with standard LLM
+   - Vision mode: sends PDF page images to VLM for direct visual analysis
 4. Embeddings generated and stored for semantic search
 5. FTS5 index updated for keyword search
 
@@ -88,6 +90,7 @@ Environment variables in `backend/.env`:
 - `AUTH_PASSWORD` - Single password for web authentication
 - `OLLAMA_BASE_URL` - Ollama server URL (default: http://localhost:11434)
 - `OLLAMA_MODEL` - Model for extraction/Q&A (default: qwen3:1.7b)
+- `OLLAMA_USE_VISION` - Enable vision model for PDF image analysis (default: false)
 - `OCR_LANGUAGE` - Tesseract languages (default: deu+eng)
 
 **Ollama Setup** (for LLM features):
@@ -97,6 +100,17 @@ brew install ollama
 ollama pull qwen3:1.7b
 OLLAMA_HOST=0.0.0.0 ollama serve  # Listen on network
 ```
+
+**Vision Model Setup** (optional, for visual document analysis):
+```bash
+# Pull a vision-capable model
+ollama pull qwen3-vl:2b
+
+# Enable in .env
+OLLAMA_MODEL=qwen3-vl:2b
+OLLAMA_USE_VISION=true
+```
+Vision mode sends PDF pages as images to the VLM for extraction instead of using OCR text. This can improve accuracy for complex layouts but is slower (~40-65s vs ~15-20s per document). OCR still runs for full-text search and embeddings.
 
 **Extraction Queue**: Documents arriving when Ollama is unavailable get `extraction_status='pending'`. A background processor (`queue.py`) checks every 60s and processes pending extractions when Ollama comes back online.
 

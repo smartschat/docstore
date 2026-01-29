@@ -12,7 +12,7 @@ A self-hosted document management system with OCR, semantic search, and LLM-powe
 - **Document Ingestion**: Upload PDFs and images via web UI, scan with camera, or drop files in the inbox folder
 - **OCR Processing**: Automatic text extraction using ocrmypdf with German + English support
 - **AI Classification**: Automatic document categorization via Ollama LLM
-- **Structured Extraction**: Extract title, counterparty, dates, and amounts from documents
+- **Structured Extraction**: Extract title, counterparty, dates, and amounts from documents (supports vision models for visual analysis)
 - **Semantic Search**: Find documents by meaning using local ONNX embeddings (ARM compatible)
 - **Q&A Interface**: Ask questions about your documents using RAG
 - **Tag Management**: Organize documents with custom tags
@@ -68,6 +68,10 @@ OLLAMA_MODEL=qwen3:1.7b
 # Optional
 DEBUG=false
 OCR_LANGUAGE=deu+eng
+
+# Vision model (optional - for visual document analysis)
+# OLLAMA_MODEL=qwen3-vl:2b
+# OLLAMA_USE_VISION=true
 ```
 
 ### Ollama Setup
@@ -82,6 +86,21 @@ OLLAMA_HOST=0.0.0.0 ollama serve  # Listen on network
 ```
 
 Documents uploaded when Ollama is unavailable will have their extraction queued and processed automatically when Ollama comes back online.
+
+### Vision Model (Optional)
+
+For improved accuracy on complex document layouts, you can use a vision language model that analyzes PDF pages as images:
+
+```bash
+# Pull a vision model
+ollama pull qwen3-vl:2b
+
+# Enable in backend/.env
+OLLAMA_MODEL=qwen3-vl:2b
+OLLAMA_USE_VISION=true
+```
+
+Vision mode is slower (~40-65s vs ~15-20s per document) but can better handle forms, certificates, and documents with complex layouts. OCR still runs for full-text search and embeddings.
 
 ## Usage
 

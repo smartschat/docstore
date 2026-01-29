@@ -6,8 +6,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 from app.services.extraction import (
+    VISION_EXTRACT_PROMPT,
     call_ollama,
     check_ollama_available,
+    extract_all_with_vision,
     extract_document_data,
     extract_metadata,
     generate_summary,
@@ -394,3 +396,253 @@ class TestExtractDocumentData:
                 assert result["document_date"] == "2024-01-15"
                 assert result["summary"] == "This is a test invoice."
                 assert result["title"] == "Test Invoice"
+
+
+class TestVisionPrompt:
+    """Tests for vision prompt configuration."""
+
+    def test_vision_prompt_discourages_overthinking(self):
+        """Vision prompt includes instruction to limit thinking."""
+        assert "Don't think too much" in VISION_EXTRACT_PROMPT
+
+    def test_vision_prompt_requests_json(self):
+        """Vision prompt requests JSON output."""
+        assert "Return JSON only" in VISION_EXTRACT_PROMPT
+        assert "JSON:" in VISION_EXTRACT_PROMPT
+
+    def test_vision_prompt_includes_all_fields(self):
+        """Vision prompt includes all required fields."""
+        required_fields = [
+            "counterparty",
+            "affected_persons",
+            "category",
+            "reference",
+            "document_date",
+            "summary",
+            "title",
+        ]
+        for field in required_fields:
+            assert field in VISION_EXTRACT_PROMPT
+
+
+class TestCallOllamaWithImages:
+    """Tests for call_ollama with vision/images."""
+
+    @pytest.mark.asyncio
+    async def test_uses_chat_endpoint_for_images(self):
+        """Uses /api/chat endpoint when images are provided."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"message": {"content": "Response text"}}
+        mock_response.raise_for_status = MagicMock()
+
+        with patch("app.services.extraction.httpx.AsyncClient") as mock_client:
+            mock_post = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__.return_value.post = mock_post
+
+            result = await call_ollama("Test prompt", images=["base64imagedata"])
+
+            # Verify chat endpoint was called
+            call_args = mock_post.call_args
+            assert "/api/chat" in call_args[0][0]
+            assert result == "Response text"
+
+    @pytest.mark.asyncio
+    async def test_uses_generate_endpoint_without_images(self):
+        """Uses /api/generate endpoint when no images provided."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"response": "Response text"}
+        mock_response.raise_for_status = MagicMock()
+
+        with patch("app.services.extraction.httpx.AsyncClient") as mock_client:
+            mock_post = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__.return_value.post = mock_post
+
+            result = await call_ollama("Test prompt")
+
+            # Verify generate endpoint was called
+            call_args = mock_post.call_args
+            assert "/api/generate" in call_args[0][0]
+            assert result == "Response text"
+
+    @pytest.mark.asyncio
+    async def test_images_included_in_chat_payload(self):
+        """Images are included in the chat message payload."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"message": {"content": "Response"}}
+        mock_response.raise_for_status = MagicMock()
+
+        test_images = ["base64image1", "base64image2"]
+
+        with patch("app.services.extraction.httpx.AsyncClient") as mock_client:
+            mock_post = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__.return_value.post = mock_post
+
+            await call_ollama("Test prompt", images=test_images)
+
+            # Check payload includes images
+            call_kwargs = mock_post.call_args[1]
+            payload = call_kwargs["json"]
+            assert "messages" in payload
+            assert payload["messages"][0]["images"] == test_images
+
+
+class TestExtractAllWithVision:
+    """Tests for extract_all_with_vision function."""
+
+    @pytest.mark.asyncio
+    async def test_extracts_all_fields(self):
+        """Extracts all fields from vision response."""
+        mock_json = json.dumps(
+            {
+                "counterparty": "Test Company",
+                "affected_persons": ["John Doe", "Jane Doe"],
+                "category": "legal",
+                "reference": "REF-123",
+                "document_date": "2024-01-15",
+                "summary": "Test summary",
+                "title": "Test Document",
+            }
+        )
+
+        with patch("app.services.extraction.call_ollama", new=AsyncMock(return_value=mock_json)):
+            result = await extract_all_with_vision(["base64image"])
+
+            assert result["counterparty"] == "Test Company"
+            assert result["affected_persons"] == ["John Doe", "Jane Doe"]
+            assert result["category"] == "legal"
+            assert result["reference"] == "REF-123"
+            assert result["document_date"] == "2024-01-15"
+            assert result["summary"] == "Test summary"
+            assert result["title"] == "Test Document"
+
+    @pytest.mark.asyncio
+    async def test_validates_date_format(self):
+        """Invalid date format results in None."""
+        mock_json = json.dumps(
+            {
+                "counterparty": "Test",
+                "document_date": "invalid-date",
+            }
+        )
+
+        with patch("app.services.extraction.call_ollama", new=AsyncMock(return_value=mock_json)):
+            result = await extract_all_with_vision(["base64image"])
+            assert result["document_date"] is None
+
+    @pytest.mark.asyncio
+    async def test_validates_title_length(self):
+        """Title too short or too long results in None."""
+        # Too short
+        mock_json = json.dumps({"title": "AB"})
+        with patch("app.services.extraction.call_ollama", new=AsyncMock(return_value=mock_json)):
+            result = await extract_all_with_vision(["base64image"])
+            assert result["title"] is None
+
+        # Too long
+        mock_json = json.dumps({"title": "x" * 101})
+        with patch("app.services.extraction.call_ollama", new=AsyncMock(return_value=mock_json)):
+            result = await extract_all_with_vision(["base64image"])
+            assert result["title"] is None
+
+    @pytest.mark.asyncio
+    async def test_handles_malformed_json(self):
+        """Malformed JSON returns empty dict."""
+        with patch("app.services.extraction.call_ollama", new=AsyncMock(return_value="not json")):
+            result = await extract_all_with_vision(["base64image"])
+            assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_handles_exception(self):
+        """Exception returns empty dict."""
+        with patch(
+            "app.services.extraction.call_ollama",
+            new=AsyncMock(side_effect=Exception("Error")),
+        ):
+            result = await extract_all_with_vision(["base64image"])
+            assert result == {}
+
+
+class TestExtractDocumentDataVisionMode:
+    """Tests for extract_document_data in vision mode."""
+
+    @pytest.mark.asyncio
+    async def test_uses_vision_when_enabled_and_images_available(self):
+        """Uses vision extraction when enabled and PDF exists."""
+        mock_json = json.dumps(
+            {
+                "counterparty": "Vision Company",
+                "affected_persons": ["Test Person"],
+                "category": "banking",
+                "document_date": "2024-01-15",
+                "summary": "Vision summary",
+                "title": "Vision Title",
+            }
+        )
+
+        mock_settings = MagicMock()
+        mock_settings.ollama_use_vision = True
+
+        with patch("app.services.extraction.settings", mock_settings):
+            with patch(
+                "app.services.extraction.check_ollama_available",
+                new=AsyncMock(return_value=True),
+            ):
+                with patch(
+                    "app.services.extraction.pdf_to_base64_images",
+                    new=AsyncMock(return_value=["base64image"]),
+                ):
+                    with patch(
+                        "app.services.extraction.call_ollama",
+                        new=AsyncMock(return_value=mock_json),
+                    ):
+                        # Create a mock path that "exists"
+                        mock_path = MagicMock()
+                        mock_path.exists.return_value = True
+
+                        result = await extract_document_data("", pdf_path=mock_path)
+
+                        assert result["counterparty"] == "Vision Company"
+                        assert result["title"] == "Vision Title"
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_text_when_images_fail(self):
+        """Falls back to text extraction when image conversion fails."""
+        mock_metadata = json.dumps({"counterparty": "Text Company", "category": "invoice"})
+
+        mock_settings = MagicMock()
+        mock_settings.ollama_use_vision = True
+
+        async def mock_call_ollama(prompt, images=None):
+            if images:
+                raise Exception("Should not be called with images")
+            if "Extract these fields" in prompt:
+                return mock_metadata
+            elif "Create a short" in prompt:
+                return "Text Title"
+            elif "Write a 1-2 sentence summary" in prompt:
+                return "Text summary"
+            return ""
+
+        with patch("app.services.extraction.settings", mock_settings):
+            with patch(
+                "app.services.extraction.check_ollama_available",
+                new=AsyncMock(return_value=True),
+            ):
+                with patch(
+                    "app.services.extraction.pdf_to_base64_images",
+                    new=AsyncMock(return_value=[]),  # Empty list = conversion failed
+                ):
+                    with patch(
+                        "app.services.extraction.call_ollama",
+                        side_effect=mock_call_ollama,
+                    ):
+                        mock_path = MagicMock()
+                        mock_path.exists.return_value = True
+
+                        result = await extract_document_data("Some text", pdf_path=mock_path)
+
+                        # Should use text extraction fallback
+                        assert result["counterparty"] == "Text Company"

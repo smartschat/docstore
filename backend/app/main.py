@@ -339,7 +339,9 @@ async def reprocess_document(
             from app.services.watcher import update_extraction_status
 
             if await check_ollama_available():
-                extraction_result = await process_document_extraction(doc_id, ocr_result.text)
+                extraction_result = await process_document_extraction(
+                    doc_id, ocr_result.text, pdf_path=file_path
+                )
                 await update_document_extraction(doc_id, extraction_result)
                 await update_extraction_status(doc_id, "completed")
 
