@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     # Ollama (local LLM)
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3:1.7b"
-    ollama_timeout: int = 120  # seconds
+    ollama_timeout: int = 180  # seconds (vision models need more time)
     ollama_use_vision: bool = False  # Use vision model (send PDF pages as images)
 
     # OCR

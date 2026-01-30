@@ -243,8 +243,11 @@ async def extract_all_with_vision(images: list[str]) -> dict[str, Any]:
             data["title"] = title
 
         return data
+    except httpx.ReadTimeout:
+        print("Vision extraction error: Ollama request timed out")
+        return {}
     except Exception as e:
-        print(f"Vision extraction error: {e}")
+        print(f"Vision extraction error: {type(e).__name__}: {e}")
         return {}
 
 
