@@ -16,6 +16,7 @@
 	} from '$lib/api';
 	import DocumentCard from '$components/DocumentCard.svelte';
 	import ScannerModal from '$lib/components/scanner/ScannerModal.svelte';
+	import { toasts } from '$lib/stores/toast';
 
 	let documents: Document[] = [];
 	let tags: Tag[] = [];
@@ -25,8 +26,6 @@
 	let currentPage = 1;
 	let pageSize = 20;
 	let loading = true;
-	let uploading = false;
-	let uploadError = '';
 
 	let filterCategory = '';
 	let filterStatus = '';
@@ -139,19 +138,23 @@
 	async function handleFileUpload(files: FileList | null) {
 		if (!files || files.length === 0) return;
 
-		uploading = true;
-		uploadError = '';
+		// Close modal immediately
+		showUploadModal = false;
+
+		const fileCount = files.length;
+		const toastId = toasts.loading(`Uploading ${fileCount} document${fileCount > 1 ? 's' : ''}...`);
 
 		try {
 			for (const file of files) {
 				await uploadDocument(file);
 			}
-			showUploadModal = false;
+			toasts.remove(toastId);
+			toasts.success(`${fileCount} document${fileCount > 1 ? 's' : ''} uploaded successfully`);
 			await loadData();
 		} catch (error) {
-			uploadError = error instanceof Error ? error.message : 'Upload failed';
-		} finally {
-			uploading = false;
+			toasts.remove(toastId);
+			const errorMessage = error instanceof Error ? error.message : 'Upload failed';
+			toasts.error(errorMessage);
 		}
 	}
 
@@ -171,27 +174,24 @@
 	}
 
 	async function handleScanUpload(event: CustomEvent<{ file: File; onSuccess: () => void; onError: (error: string) => void }>) {
-		const { file, onSuccess, onError } = event.detail;
-		uploading = true;
-		uploadError = '';
+		const { file, onSuccess } = event.detail;
+
+		// Close scanner immediately
+		onSuccess();
+		showScanner = false;
+
+		// Show loading toast and upload in background
+		const toastId = toasts.loading('Uploading document...');
 
 		try {
 			await uploadDocument(file);
-			// Upload succeeded - call onSuccess before refresh
-			// so scanner closes even if list refresh fails
-			onSuccess();
-			// Refresh list separately (failure here shouldn't trigger retry)
-			try {
-				await loadData();
-			} catch (refreshError) {
-				console.error('Failed to refresh document list:', refreshError);
-			}
+			toasts.remove(toastId);
+			toasts.success('Document uploaded successfully');
+			await loadData();
 		} catch (error) {
+			toasts.remove(toastId);
 			const errorMessage = error instanceof Error ? error.message : 'Upload failed';
-			uploadError = errorMessage;
-			onError(errorMessage);
-		} finally {
-			uploading = false;
+			toasts.error(errorMessage);
 		}
 	}
 
@@ -401,12 +401,6 @@
 			<div class="relative bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
 				<h2 class="text-lg font-semibold text-slate-900 mb-4">Upload Documents</h2>
 
-				{#if uploadError}
-					<div class="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
-						{uploadError}
-					</div>
-				{/if}
-
 				<div
 					class="border-2 border-dashed rounded-lg p-8 text-center transition-colors
 						{dragOver ? 'border-primary-500 bg-primary-50' : 'border-slate-300'}"
@@ -416,38 +410,33 @@
 					role="button"
 					tabindex="0"
 				>
-					{#if uploading}
-						<div class="spinner mx-auto"></div>
-						<p class="mt-2 text-sm text-slate-500">Uploading...</p>
-					{:else}
-						<svg
-							class="mx-auto h-12 w-12 text-slate-400"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+					<svg
+						class="mx-auto h-12 w-12 text-slate-400"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+						/>
+					</svg>
+					<p class="mt-2 text-sm text-slate-500">
+						Drag and drop files here, or
+						<label class="text-primary-600 hover:text-primary-700 cursor-pointer">
+							browse
+							<input
+								type="file"
+								class="sr-only"
+								accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif"
+								multiple
+								on:change={(e) => handleFileUpload(e.currentTarget.files)}
 							/>
-						</svg>
-						<p class="mt-2 text-sm text-slate-500">
-							Drag and drop files here, or
-							<label class="text-primary-600 hover:text-primary-700 cursor-pointer">
-								browse
-								<input
-									type="file"
-									class="sr-only"
-									accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif"
-									multiple
-									on:change={(e) => handleFileUpload(e.currentTarget.files)}
-								/>
-							</label>
-						</p>
-						<p class="mt-1 text-xs text-slate-400">PDF, JPG, PNG, TIFF up to 50MB</p>
-					{/if}
+						</label>
+					</p>
+					<p class="mt-1 text-xs text-slate-400">PDF, JPG, PNG, TIFF up to 50MB</p>
 				</div>
 
 				<div class="mt-4 flex justify-end">

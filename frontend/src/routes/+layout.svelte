@@ -6,6 +6,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
+	import Toast from '$lib/components/Toast.svelte';
 
 	// Register service worker for PWA support
 	onMount(() => {
@@ -153,5 +154,7 @@
 				{/each}
 			</div>
 		</nav>
+
+		<Toast />
 	</div>
 {/if}

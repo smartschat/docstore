@@ -190,10 +190,9 @@
 				signal: abortController.signal
 			});
 
-			setUploading();
-
 			const file = pdfBlobToFile(pdfBlob);
 
+			// Dispatch upload event - parent will close modal immediately and handle upload via toast
 			dispatch('upload', {
 				file,
 				onSuccess: () => {
@@ -202,9 +201,7 @@
 					handleClose();
 				},
 				onError: (error: string) => {
-					if (!open) return;
-					scannerError.set(error || 'Upload failed. Please try again.');
-					goToReview();
+					// Errors now handled via toast in parent
 				}
 			});
 		} catch (error) {
