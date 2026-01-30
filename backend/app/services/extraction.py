@@ -66,7 +66,7 @@ Look at this document image and extract the following. Return JSON only.
   "category": "One of: salary, tax, insurance, medical, banking, utilities, invoice, receipt, contract, legal, correspondence, other",
   "reference": "Reference/invoice/policy number",
   "document_date": "Main date as YYYY-MM-DD",
-  "summary": "1-2 sentence summary in the document's language (German or English)",
+  "summary": "1-2 sentence summary in German",
   "title": "Short title in German (2-5 words)"
 }
 
@@ -113,9 +113,7 @@ Title:"""
 
 
 # Step 3: Generate summary
-SUMMARY_PROMPT = """Write a 1-2 sentence summary of this document.
-IMPORTANT: Write in the SAME LANGUAGE as the document.
-If the document is in German, write German. If English, write English.
+SUMMARY_PROMPT = """Write a 1-2 sentence summary of this document in German.
 
 Document:
 {text}
