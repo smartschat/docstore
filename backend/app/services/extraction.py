@@ -56,9 +56,7 @@ async def pdf_to_base64_images(pdf_path: Path, max_pages: int = 1) -> list[str]:
 
 
 # Vision prompt - extracts everything in one call
-VISION_EXTRACT_PROMPT = """Don't think too much. Use at most two paragraphs of thinking.
-
-Look at this document image and extract the following. Return JSON only.
+VISION_EXTRACT_PROMPT = """Look at this document image and extract the following. Return JSON only.
 
 {
   "counterparty": "Company or organization that issued this document",
@@ -187,6 +185,7 @@ async def call_ollama(prompt: str, images: list[str] | None = None) -> str:
                     }
                 ],
                 "stream": False,
+                "think": False,
                 "options": {
                     "temperature": 0,
                 },
