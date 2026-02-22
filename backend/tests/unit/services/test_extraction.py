@@ -381,7 +381,7 @@ class TestExtractDocumentData:
                 return mock_metadata
             elif "Create a short" in prompt:  # Title prompt starts with this
                 return "Test Invoice"
-            elif "Write a 1-2 sentence summary" in prompt:  # Summary prompt
+            elif "Write a 3-4 sentence summary" in prompt:  # Summary prompt
                 return "This is a test invoice."
             return ""
 
@@ -401,9 +401,9 @@ class TestExtractDocumentData:
 class TestVisionPrompt:
     """Tests for vision prompt configuration."""
 
-    def test_vision_prompt_discourages_overthinking(self):
-        """Vision prompt includes instruction to limit thinking."""
-        assert "Don't think too much" in VISION_EXTRACT_PROMPT
+    def test_vision_prompt_requests_extraction(self):
+        """Vision prompt includes instruction to extract from image."""
+        assert "Look at this document image" in VISION_EXTRACT_PROMPT
 
     def test_vision_prompt_requests_json(self):
         """Vision prompt requests JSON output."""
